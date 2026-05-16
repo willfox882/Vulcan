@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.optimize import minimize
+from scipy.optimize import minimize, brentq
 import math
 
 # ─── ENTRY POINT ─────────────────────────────────────────────────────────────
@@ -147,9 +147,8 @@ def _elastic_twl_t_joint(joint, material, loads, service):
 
 def _ic_method_t_joint(joint, material, loads, service):
     """
-    Instantaneous Center method for T-joint under combined in-plane shear + torsion.
-    Discretises weld group into elements, uses Lesik-Kennedy load-deformation curve.
-    scipy.optimize.minimize locates IC that satisfies equilibrium.
+    Instantaneous Center method (AISC Manual Part 8 / Tide) for T-joint
+    under combined in-plane shear Fy + torsion Mz.
     """
     t1 = joint["webThickness"]
     L = joint["jointLength"]
@@ -158,79 +157,30 @@ def _ic_method_t_joint(joint, material, loads, service):
 
     Fy = loads.get("Fy", 0.0)
     Mz = loads.get("Mz", 0.0)
-
     P = abs(Fy)
-    T = abs(Mz)
-    if P < 1e-9 and T < 1e-9:
-        return _zero_result("IC Method", w, _allowable_stress(service, F_EXX))
 
-    # Build weld group: two parallel lines at x = ±t1/2, each length L
+    # Two parallel weld lines at x = ±t1/2, each length L
     N_per_line = 50
+    elem_len = L / N_per_line
     elements = []
     for sign in [-1, 1]:
         x0 = sign * t1 / 2.0
         for i in range(N_per_line):
             y = -L/2 + L * (i + 0.5) / N_per_line
             elements.append((x0, y))
-
-    theta = np.radians(0)
-
-    def equilibrium_residual(ic_xy):
-        x_ic, y_ic = ic_xy
-        r_vec = [(ex - x_ic, ey - y_ic) for (ex, ey) in elements]
-        r_mag = [np.sqrt(rx**2 + ry**2) for (rx, ry) in r_vec]
-        r_max = max(r_mag) if max(r_mag) > 1e-9 else 1.0
-
-        du_crit = _delta_ult_fn(theta, w)
-        deltas = [r / r_max * du_crit for r in r_mag]
-        forces = [_weld_element_force(theta, w, F_EXX, d, du_crit) for d in deltas]
-
-        Fy_sum = sum(f * (rx / r) if r > 1e-9 else 0
-                     for f, (rx, ry), r in zip(forces, r_vec, r_mag))
-        M_sum = sum(f * ri for f, ri in zip(forces, r_mag))
-
-        M_applied = T + P * abs(x_ic)
-        res_Fy = Fy_sum - P
-        res_M = M_sum - M_applied
-
-        return res_Fy**2 + (res_M / L)**2
-
-    result = minimize(equilibrium_residual, [0.0, 0.0], method="Nelder-Mead",
-                      options={"xatol": 0.01, "fatol": 1.0, "maxiter": 2000})
-
-    x_ic, y_ic = result.x
-    r_vec = [(ex - x_ic, ey - y_ic) for (ex, ey) in elements]
-    r_mag = [np.sqrt(rx**2 + ry**2) for (rx, ry) in r_vec]
-    r_max = max(r_mag) if max(r_mag) > 1e-9 else 1.0
-    du_crit = _delta_ult_fn(theta, w)
-    deltas = [r / r_max * du_crit for r in r_mag]
-    forces = [_weld_element_force(theta, w, F_EXX, d, du_crit) for d in deltas]
-
     total_weld_L = 2.0 * L
-    element_length = L / N_per_line
-    R_total = sum(forces) * element_length
-    q_max = R_total / total_weld_L
 
-    a = 0.707 * w
-    f_R_ic = q_max / a if a > 0 else 0.0
-    F_w_allow = _allowable_stress(service, F_EXX)
-    utilization = f_R_ic / F_w_allow if F_w_allow > 0 else 0.0
-    w_required = q_max / (0.707 * F_w_allow) if F_w_allow > 0 else 0.0
+    if P < 1e-9:
+        # No vertical shear: IC method not meaningful — defer to Elastic.
+        return _zero_result("IC Method", w, _allowable_stress(service, F_EXX))
 
-    return {
-        "method": "IC Method",
-        "f_v": round(abs(Fy) / (a * total_weld_L), 2) if a > 0 else 0.0,
-        "f_t": 0.0,
-        "f_b": 0.0,
-        "f_R": round(f_R_ic, 2),
-        "F_w_allow": round(F_w_allow, 2),
-        "utilization": round(utilization, 4),
-        "utilization_pct": round(utilization * 100, 1),
-        "w_required": round(w_required, 2),
-        "w_provided": w,
-        "adequate": bool(w >= w_required),
-        "L_total": total_weld_L,
-    }
+    # Pure shear (e ≈ 0) → IC at infinity, all elements fully mobilized
+    if abs(Mz) < 1e-6 * abs(Fy) * L:
+        P_n = _ic_capacity_pure_shear(elements, elem_len, w, F_EXX)
+        return _ic_result_from_capacity(P_n, P, w, service, F_EXX, total_weld_L)
+
+    P_n, x_ic = _ic_capacity(elements, elem_len, w, F_EXX, Fy, Mz)
+    return _ic_result_from_capacity(P_n, P, w, service, F_EXX, total_weld_L, x_ic)
 
 
 # ─── LAP JOINT ───────────────────────────────────────────────────────────────
@@ -297,66 +247,26 @@ def _ic_method_lap(joint, material, loads, service):
     Fy = loads.get("Fy", 0.0)
     Mz = loads.get("Mz", 0.0)
     P = abs(Fy)
-    T = abs(Mz)
-
-    if P < 1e-9 and T < 1e-9:
-        return _zero_result("IC Method", w, _allowable_stress(service, F_EXX))
 
     N = 40
+    elem_len = L_j / N
     elements = []
     for sign in [-1, 1]:
         x0 = sign * (t1 / 2.0)
         for i in range(N):
             y = -L_j/2 + L_j * (i + 0.5) / N
             elements.append((x0, y))
-
-    theta = np.radians(0)
-
-    def residual(ic_xy):
-        x_ic, y_ic = ic_xy
-        r_vec = [(ex - x_ic, ey - y_ic) for (ex, ey) in elements]
-        r_mag = [np.sqrt(rx**2 + ry**2) + 1e-9 for (rx, ry) in r_vec]
-        r_max = max(r_mag)
-        du_crit = _delta_ult_fn(theta, w)
-        deltas = [r / r_max * du_crit for r in r_mag]
-        forces = [_weld_element_force(theta, w, F_EXX, d, du_crit) for d in deltas]
-        Fy_sum = sum(f * (rx / r) for f, (rx, ry), r in zip(forces, r_vec, r_mag))
-        M_sum = sum(f * ri for f, ri in zip(forces, r_mag))
-        M_applied = T + P * abs(x_ic)
-        return (Fy_sum - P)**2 + (M_sum - M_applied)**2 / L_j**2
-
-    result = minimize(residual, [0.0, 0.0], method="Nelder-Mead",
-                      options={"xatol": 0.01, "fatol": 1.0, "maxiter": 2000})
-    x_ic, y_ic = result.x
-    r_vec = [(ex - x_ic, ey - y_ic) for (ex, ey) in elements]
-    r_mag = [np.sqrt(rx**2 + ry**2) + 1e-9 for (rx, ry) in r_vec]
-    r_max = max(r_mag)
-    du_crit = _delta_ult_fn(theta, w)
-    deltas = [r / r_max * du_crit for r in r_mag]
-    forces = [_weld_element_force(theta, w, F_EXX, d, du_crit) for d in deltas]
     total_weld_L = 2.0 * L_j
-    element_length = L_j / N
-    R_total = sum(forces) * element_length
-    q_max = R_total / total_weld_L
-    a = 0.707 * w
-    f_R = q_max / a if a > 0 else 0.0
-    F_w_allow = _allowable_stress(service, F_EXX)
-    utilization = f_R / F_w_allow if F_w_allow > 0 else 0.0
-    w_required = q_max / (0.707 * F_w_allow) if F_w_allow > 0 else 0.0
 
-    return {
-        "method": "IC Method",
-        "f_v": round(P / (a * total_weld_L), 2) if a > 0 else 0.0,
-        "f_t": 0.0, "f_b": 0.0,
-        "f_R": round(f_R, 2),
-        "F_w_allow": round(F_w_allow, 2),
-        "utilization": round(utilization, 4),
-        "utilization_pct": round(utilization * 100, 1),
-        "w_required": round(w_required, 2),
-        "w_provided": w,
-        "adequate": bool(w >= w_required),
-        "L_total": total_weld_L,
-    }
+    if P < 1e-9:
+        return _zero_result("IC Method", w, _allowable_stress(service, F_EXX))
+
+    if abs(Mz) < 1e-6 * abs(Fy) * L_j:
+        P_n = _ic_capacity_pure_shear(elements, elem_len, w, F_EXX)
+        return _ic_result_from_capacity(P_n, P, w, service, F_EXX, total_weld_L)
+
+    P_n, x_ic = _ic_capacity(elements, elem_len, w, F_EXX, Fy, Mz)
+    return _ic_result_from_capacity(P_n, P, w, service, F_EXX, total_weld_L, x_ic)
 
 
 # ─── BUTT JOINT ──────────────────────────────────────────────────────────────
@@ -480,68 +390,29 @@ def _elastic_twl_corner(joint, material, loads, service):
 
 
 def _ic_method_corner(joint, material, loads, service):
-    """IC method for corner joint — single weld line."""
-    t1 = joint.get("plate1Thickness", 10)
+    """IC method for corner joint — single weld line at x=0."""
     L_j = joint.get("jointLength", 300)
     w = joint.get("weldSizeInside", 6)
     F_EXX = material.get("F_EXX", 483)
     Fy = loads.get("Fy", 0.0)
     Mz = loads.get("Mz", 0.0)
     P = abs(Fy)
-    T = abs(Mz)
-
-    if P < 1e-9 and T < 1e-9:
-        return _zero_result("IC Method", w, _allowable_stress(service, F_EXX))
 
     N = 40
+    elem_len = L_j / N
+    # Single weld line offset slightly so x_spread > 0 won't be zero in solver
     elements = [(0.0, -L_j/2 + L_j * (i + 0.5) / N) for i in range(N)]
-    theta = np.radians(0)
-
-    def residual(ic_xy):
-        x_ic, y_ic = ic_xy
-        r_vec = [(ex - x_ic, ey - y_ic) for (ex, ey) in elements]
-        r_mag = [np.sqrt(rx**2 + ry**2) + 1e-9 for (rx, ry) in r_vec]
-        r_max = max(r_mag)
-        du_crit = _delta_ult_fn(theta, w)
-        deltas = [r / r_max * du_crit for r in r_mag]
-        forces = [_weld_element_force(theta, w, F_EXX, d, du_crit) for d in deltas]
-        Fy_sum = sum(f * (rx / r) for f, (rx, ry), r in zip(forces, r_vec, r_mag))
-        M_sum = sum(f * ri for f, ri in zip(forces, r_mag))
-        M_applied = T + P * abs(x_ic)
-        return (Fy_sum - P)**2 + (M_sum - M_applied)**2 / L_j**2
-
-    result = minimize(residual, [0.0, 0.0], method="Nelder-Mead",
-                      options={"xatol": 0.01, "fatol": 1.0, "maxiter": 2000})
-    x_ic, y_ic = result.x
-    r_vec = [(ex - x_ic, ey - y_ic) for (ex, ey) in elements]
-    r_mag = [np.sqrt(rx**2 + ry**2) + 1e-9 for (rx, ry) in r_vec]
-    r_max = max(r_mag)
-    du_crit = _delta_ult_fn(theta, w)
-    deltas = [r / r_max * du_crit for r in r_mag]
-    forces = [_weld_element_force(theta, w, F_EXX, d, du_crit) for d in deltas]
     total_weld_L = float(L_j)
-    element_length = L_j / N
-    R_total = sum(forces) * element_length
-    q_max = R_total / total_weld_L
-    a = 0.707 * w
-    f_R = q_max / a if a > 0 else 0.0
-    F_w_allow = _allowable_stress(service, F_EXX)
-    utilization = f_R / F_w_allow if F_w_allow > 0 else 0.0
-    w_required = q_max / (0.707 * F_w_allow) if F_w_allow > 0 else 0.0
 
-    return {
-        "method": "IC Method",
-        "f_v": round(P / (a * total_weld_L), 2) if a > 0 else 0.0,
-        "f_t": 0.0, "f_b": 0.0,
-        "f_R": round(f_R, 2),
-        "F_w_allow": round(F_w_allow, 2),
-        "utilization": round(utilization, 4),
-        "utilization_pct": round(utilization * 100, 1),
-        "w_required": round(w_required, 2),
-        "w_provided": w,
-        "adequate": bool(w >= w_required),
-        "L_total": total_weld_L,
-    }
+    if P < 1e-9:
+        return _zero_result("IC Method", w, _allowable_stress(service, F_EXX))
+
+    if abs(Mz) < 1e-6 * abs(Fy) * L_j:
+        P_n = _ic_capacity_pure_shear(elements, elem_len, w, F_EXX)
+        return _ic_result_from_capacity(P_n, P, w, service, F_EXX, total_weld_L)
+
+    P_n, x_ic = _ic_capacity(elements, elem_len, w, F_EXX, Fy, Mz)
+    return _ic_result_from_capacity(P_n, P, w, service, F_EXX, total_weld_L, x_ic)
 
 
 # ─── VALIDATION & SYMBOL ─────────────────────────────────────────────────────
@@ -618,6 +489,138 @@ def _generate_groove_symbol(joint, structural_result):
 
 
 # ─── IC METHOD HELPERS ───────────────────────────────────────────────────────
+
+def _ic_capacity(elements, elem_len, w, F_EXX, Fy, Mz, N_samples=51):
+    """
+    Compute the nominal capacity P_n of a weld group under combined
+    vertical shear Fy (applied at the weld centroid) and in-plane couple
+    Mz, by locating the Instantaneous Center per AISC Manual Part 8 /
+    Tide.
+
+    The weld group lies in the x–y plane and is symmetric about the
+    x-axis (y_ic = 0 by symmetry; only x_ic is solved). All element
+    forces act perpendicular to r_i = (ex - x_ic, ey), in the CCW sense
+    about IC. The critical element (largest r) is taken to be at the
+    rupture deformation delta_ult; deformation at other elements scales
+    linearly with r.
+
+    Convergence criterion (consistency of force and moment equilibrium):
+
+        |ΣFv| * |e - x_ic| = ΣF_i * r_i,    where e = Mz / Fy
+
+    Returns (P_n, x_ic) where P_n = |ΣFv| at the converged IC, or
+    (None, None) if no consistent IC could be found.
+    """
+    if abs(Fy) < 1e-9:
+        return None, None
+
+    e = Mz / Fy
+    du_crit = _delta_ult_fn(0.0, w)
+    if du_crit < 1e-9:
+        return None, None
+
+    def _force_sums(x_ic):
+        rxs = np.array([ex - x_ic for (ex, _) in elements])
+        rys = np.array([ey for (_, ey) in elements])
+        rs = np.hypot(rxs, rys)
+        r_max = rs.max()
+        if r_max < 1e-9:
+            return 0.0, 0.0
+        rhos = rs / r_max
+        # R_ult per unit length (Lesik-Kennedy at rho=1)
+        R_ult_per_mm = 0.60 * F_EXX * 0.707 * w
+        # Deformation factor (1.9·rho - 0.9·rho²)^0.3  (since (rho*(1.9 - 0.9*rho))^0.3)
+        with np.errstate(invalid="ignore"):
+            def_fac = np.where(rhos > 0,
+                               (rhos * (1.9 - 0.9 * rhos))**0.3, 0.0)
+        Fi = R_ult_per_mm * elem_len * def_fac  # element force magnitudes
+        # CCW unit perp to r = (-ry/r, rx/r); we take the y-component
+        with np.errstate(divide="ignore", invalid="ignore"):
+            Fy_arr = np.where(rs > 1e-9, Fi * rxs / rs, 0.0)
+        Fv_sum = float(Fy_arr.sum())
+        M_sum  = float((Fi * rs).sum())
+        return Fv_sum, M_sum
+
+    def _consistency(x_ic):
+        Fv, M = _force_sums(x_ic)
+        # At correct IC: |Fv| * |e - x_ic| == M
+        return abs(Fv) * abs(e - x_ic) - M
+
+    # Reference length for bracketing — use spread of weld elements
+    y_spread = max(ey for (_, ey) in elements) - min(ey for (_, ey) in elements)
+    x_spread = max(ex for (ex, _) in elements) - min(ex for (ex, _) in elements)
+    L_ref = max(y_spread, x_spread, abs(e), 1.0)
+    bracket = 4.0 * L_ref
+
+    xs = np.linspace(-bracket, bracket, N_samples)
+    vals = np.array([_consistency(x) for x in xs])
+
+    # Find sign change closest to the load eccentricity
+    x_ic = None
+    sign_changes = []
+    for i in range(len(xs) - 1):
+        if vals[i] * vals[i + 1] < 0 and np.isfinite(vals[i]) and np.isfinite(vals[i + 1]):
+            sign_changes.append((xs[i], xs[i + 1]))
+    if sign_changes:
+        # Prefer the bracket whose midpoint is closest to e
+        sign_changes.sort(key=lambda b: abs((b[0] + b[1]) / 2.0 - e))
+        a, b = sign_changes[0]
+        try:
+            x_ic = brentq(_consistency, a, b, xtol=0.001 * L_ref, maxiter=200)
+        except (ValueError, RuntimeError):
+            x_ic = None
+    if x_ic is None:
+        # Fallback: location minimizing |consistency|
+        idx = int(np.argmin(np.abs(vals)))
+        x_ic = float(xs[idx])
+
+    Fv, _ = _force_sums(x_ic)
+    P_n = abs(Fv)
+    return P_n, x_ic
+
+
+def _ic_capacity_pure_shear(elements, elem_len, w, F_EXX):
+    """
+    Concentric-shear limit: e = 0 → IC at infinity, every element fully
+    mobilized, so P_n = sum of R_ult per element. Used when |Mz| → 0.
+    """
+    R_ult_per_mm = 0.60 * F_EXX * 0.707 * w
+    return R_ult_per_mm * elem_len * len(elements)
+
+
+def _ic_result_from_capacity(P_n, P_applied, w, service, F_EXX, total_weld_L, x_ic=None):
+    """Build a method-result dict from a computed nominal capacity P_n."""
+    F_w_allow = _allowable_stress(service, F_EXX)
+    if P_n is None or P_n < 1e-9:
+        return _zero_result("IC Method", w, F_w_allow)
+    code_basis = service.get("codeBasis", "ASD")
+    if code_basis == "ASD":
+        P_allow = P_n / 2.00          # AISC J2 Ω
+    else:
+        P_allow = 0.75 * P_n           # AISC J2 φ
+    utilization = P_applied / P_allow if P_allow > 0 else float("inf")
+    w_required = w * utilization       # R_ult ∝ w, so required size scales linearly
+    a = 0.707 * w
+    f_R = (P_applied / total_weld_L) / a if (a > 0 and total_weld_L > 0) else 0.0
+    res = {
+        "method": "IC Method",
+        "f_v": round(f_R, 2),
+        "f_t": 0.0, "f_b": 0.0,
+        "f_R": round(f_R, 2),
+        "F_w_allow": round(F_w_allow, 2),
+        "P_capacity_N": round(P_n, 0),
+        "P_allow_N": round(P_allow, 0),
+        "utilization": round(utilization, 4),
+        "utilization_pct": round(utilization * 100, 1),
+        "w_required": round(w_required, 2),
+        "w_provided": w,
+        "adequate": bool(utilization <= 1.0),
+        "L_total": float(total_weld_L),
+    }
+    if x_ic is not None:
+        res["x_ic"] = round(x_ic, 2)
+    return res
+
 
 def _weld_element_force(theta_rad, w_mm, F_EXX_MPa, delta, delta_ult):
     """Lesik-Kennedy load-deformation curve for a fillet weld element."""

@@ -118,6 +118,28 @@ def test_b7_miner_variable_amplitude():
     assert _approx(res["damage"], 0.488, 0.01), f"D={res['damage']}"
 
 
+def test_ic_method_default_joint_not_bogus():
+    """Regression: IC method must return reasonable utilization for the
+    default T-joint geometry (t1=12, L=400, w=8) under the default load
+    (Fy=-10kN, Mz=500kN·mm), not a fixed ~169% pegged to F_ult/F_allow."""
+    joint = {"type": "t_joint", "webThickness": 12, "flangeThickness": 16,
+             "jointLength": 400, "weldSize": 8}
+    loads = {"Fx": 0, "Fy": -10000, "Fz": 0, "Mx": 0, "My": 0, "Mz": 500000}
+    ic = structural._ic_method_t_joint(joint, {"F_EXX": 483}, loads, {"codeBasis": "ASD"})
+    # Must be small (overdesigned joint) and ≤ elastic
+    assert ic["utilization_pct"] < 20.0, f"IC util={ic['utilization_pct']}%"
+    # w_required must NOT scale with the provided weld size — it is a
+    # function of demand only. Compare against a larger w.
+    joint2 = dict(joint); joint2["weldSize"] = 20.0
+    ic2 = structural._ic_method_t_joint(joint2, {"F_EXX": 483}, loads, {"codeBasis": "ASD"})
+    # w_required should be roughly invariant (within numerical tolerance)
+    assert abs(ic["w_required"] - ic2["w_required"]) < 0.05, \
+        f"w_req drifts with w: {ic['w_required']} vs {ic2['w_required']}"
+    # And utilization should drop by ~factor (20/8 = 2.5)
+    ratio = ic["utilization_pct"] / max(ic2["utilization_pct"], 1e-6)
+    assert 2.0 < ratio < 3.0, f"IC util ratio (w=8 vs w=20) = {ratio:.2f}, expected ≈2.5"
+
+
 def test_b11_cooling_time_3d_regime():
     """Test 11: t8/5 in 3D regime with Q=1.5 kJ/mm, T0=100°C → ≈6.4 s.
 

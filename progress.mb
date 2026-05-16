@@ -13,9 +13,12 @@ Vulcan — browser-based welded joint design tool (AWS D1.1 / AISC 360). React 1
 Forensic audit doctrine (Phases A–F): assume everything wrong, verify by hand-calc, no fixes until user reviews AUDIT_REPORT.md in Phase G.
 
 # CURRENT STATE
-Phase 6 Forensic Audit — Fix batch #1–4 COMPLETE. All 7 Critical findings + C-003 + C-103 fixed (9 fixes total). 7 findings deferred to follow-up PRs (Major UI + Minor cleanup). Regression tests `public/python/tests/test_audit_phase_b.py` — 8/8 pass. `tsc --noEmit` clean. Browser smoke test not yet performed by user.
+Phase 6 Forensic Audit — Fix batch #1–5 COMPLETE.
 
-Fixed: C-001, C-003, C-005, C-007, C-101, C-102, C-103, C-202, C-203.
+Fix batch #5 (this session): C-400 IC method always returned ~169% util pegged to F_ult/F_allow regardless of applied load, because the solver set every weld element to rupture deformation and divided ultimate strength by allowable stress. With governing = max(elastic, IC), the broken IC value dominated, so every joint reported INADEQUATE. Rewrote IC solver per AISC Manual Part 8 / Tide: locate IC by moment-force consistency `|ΣFv|·|e-x_ic| = ΣF_i·r_i`, take P_n = |ΣFv| at convergence, util = P_applied / (P_n/Ω). New helpers `_ic_capacity`, `_ic_capacity_pure_shear`, `_ic_result_from_capacity` shared across T-joint / lap / corner. Default T-joint now reports ~1.7% util (was 169.1%), `w_required` is invariant in `w` as physics demands, and ratio of utils scales 1/w. New regression test `test_ic_method_default_joint_not_bogus`.
+
+Fixed: C-001, C-003, C-005, C-007, C-101, C-102, C-103, C-202, C-203, C-400.
+Regression tests 9/9 pass. tsc clean.
 Deferred (need user direction): C-002, C-004, C-006, C-008, C-104, C-201, C-301.
 
 # TASKS
