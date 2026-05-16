@@ -1,0 +1,87 @@
+{
+  "metadata": {
+    "name": "Lifting Lug Design",
+    "version": "2.0",
+    "createdAt": "2026-05-07T00:00:00.000Z",
+    "modifiedAt": "2026-05-07T00:00:00.000Z"
+  },
+  "joints": [
+    {
+      "id": "j-001",
+      "name": "WLD-001",
+      "type": "t_joint",
+      "geometry": {
+        "type": "t_joint",
+        "webThickness": 20,
+        "flangeThickness": 25,
+        "jointLength": 300,
+        "weldSize": 10
+      },
+      "material": {
+        "id": "A572-50",
+        "name": "ASTM A572 Gr 50",
+        "type": "carbon_steel",
+        "Fy": 345,
+        "Fu": 450,
+        "F_EXX": 483,
+        "unit": "MPa"
+      },
+      "loadCases": [
+        {
+          "id": "lc-001",
+          "name": "SWL (Safe Working Load)",
+          "type": "static",
+          "category": "O",
+          "forces": {
+            "Fx": 0,
+            "Fy": -150000,
+            "Fz": 0,
+            "Mx": 0,
+            "My": 0,
+            "Mz": 2000000
+          }
+        },
+        {
+          "id": "lc-002",
+          "name": "Proof Load (2x SWL)",
+          "type": "static",
+          "category": "L",
+          "forces": {
+            "Fx": 0,
+            "Fy": -300000,
+            "Fz": 0,
+            "Mx": 0,
+            "My": 0,
+            "Mz": 4000000
+          }
+        },
+        {
+          "id": "lc-003",
+          "name": "Dynamic (1.5x SWL + impact)",
+          "type": "static",
+          "category": "L",
+          "forces": {
+            "Fx": 30000,
+            "Fy": -225000,
+            "Fz": 0,
+            "Mx": 0,
+            "My": 0,
+            "Mz": 3000000
+          }
+        }
+      ],
+      "service": {
+        "codeBasis": "ASD",
+        "designLife": 10,
+        "operatingFrequency": 0,
+        "position": "1F",
+        "environment": "field",
+        "productionVolume": "one_off",
+        "qualityLevel": "radiographic"
+      }
+    }
+  ],
+  "activeJointId": "j-001",
+  "customMaterials": [],
+  "loadCaseLibrary": []
+}

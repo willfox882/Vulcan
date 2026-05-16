@@ -1,0 +1,43 @@
+{
+  "code_revision": "AWS D1.1:2020 Table 5.8",
+  "categories": {
+    "I": {
+      "description": "Structural steels: A36, A53, A500, A501, A709 Gr 36, API 5L Gr B",
+      "CE_IIW_max": 0.40,
+      "thresholds": [
+        { "t_max": 19, "preheat_C": 0 },
+        { "t_max": 38, "preheat_C": 0 },
+        { "t_max": 65, "preheat_C": 10 },
+        { "t_max": 9999, "preheat_C": 10 }
+      ]
+    },
+    "II": {
+      "description": "High-strength structural: A572 Gr 42/50/60/65, A709 Gr 50/50W, A913 Gr 50",
+      "CE_IIW_max": 0.45,
+      "thresholds": [
+        { "t_max": 19, "preheat_C": 10 },
+        { "t_max": 38, "preheat_C": 10 },
+        { "t_max": 65, "preheat_C": 65 },
+        { "t_max": 9999, "preheat_C": 110 }
+      ]
+    },
+    "III": {
+      "description": "Quenched and tempered: A514, A517, A709 Gr 100/100W",
+      "CE_IIW_max": 0.70,
+      "thresholds": [
+        { "t_max": 65, "preheat_C": 110 },
+        { "t_max": 9999, "preheat_C": 150 }
+      ]
+    },
+    "IV": {
+      "description": "Weathering steel: A588, A709 Gr 50W",
+      "CE_IIW_max": 0.50,
+      "thresholds": [
+        { "t_max": 19, "preheat_C": 10 },
+        { "t_max": 38, "preheat_C": 65 },
+        { "t_max": 65, "preheat_C": 110 },
+        { "t_max": 9999, "preheat_C": 150 }
+      ]
+    }
+  }
+}

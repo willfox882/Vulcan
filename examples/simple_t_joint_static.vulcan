@@ -1,0 +1,59 @@
+{
+  "metadata": {
+    "name": "Simple T-Joint Static",
+    "version": "2.0",
+    "createdAt": "2026-05-07T00:00:00.000Z",
+    "modifiedAt": "2026-05-07T00:00:00.000Z"
+  },
+  "joints": [
+    {
+      "id": "j-001",
+      "name": "WLD-001",
+      "type": "t_joint",
+      "geometry": {
+        "type": "t_joint",
+        "webThickness": 12,
+        "flangeThickness": 16,
+        "jointLength": 400,
+        "weldSize": 8
+      },
+      "material": {
+        "id": "A36",
+        "name": "ASTM A36",
+        "type": "carbon_steel",
+        "Fy": 250,
+        "Fu": 400,
+        "F_EXX": 483,
+        "unit": "MPa"
+      },
+      "loadCases": [
+        {
+          "id": "lc-001",
+          "name": "Dead + Operating",
+          "type": "static",
+          "category": "O",
+          "forces": {
+            "Fx": 0,
+            "Fy": -10000,
+            "Fz": 0,
+            "Mx": 0,
+            "My": 0,
+            "Mz": 500000
+          }
+        }
+      ],
+      "service": {
+        "codeBasis": "ASD",
+        "designLife": 25,
+        "operatingFrequency": 0,
+        "position": "1F",
+        "environment": "shop",
+        "productionVolume": "repeat",
+        "qualityLevel": "structural"
+      }
+    }
+  ],
+  "activeJointId": "j-001",
+  "customMaterials": [],
+  "loadCaseLibrary": []
+}

@@ -1,0 +1,13 @@
+{
+  "code_revision": "AWS D1.1:2020",
+  "description": "Minimum fillet weld size based on thicker base metal connected",
+  "unit": "mm",
+  "note": "Minimum does not exceed thickness of thinner part",
+  "thresholds": [
+    { "t_max": 6.0, "w_min": 3.0, "label": "t ≤ 6mm" },
+    { "t_max": 12.0, "w_min": 5.0, "label": "6 < t ≤ 12mm" },
+    { "t_max": 19.0, "w_min": 6.0, "label": "12 < t ≤ 19mm" },
+    { "t_max": 38.0, "w_min": 8.0, "label": "19 < t ≤ 38mm" },
+    { "t_max": 999.0, "w_min": 10.0, "label": "t > 38mm" }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "code_revision": "2024",
+  "materials": [
+    {
+      "id": "Al5083", "name": "5083-H321", "type": "aluminum",
+      "Fy": 215, "Fu": 305, "F_EXX": 290, "unit": "MPa",
+      "chemistry": { "Mg": 4.5, "Mn": 0.7, "Cr": 0.15 },
+      "requires_pwht": false
+    },
+    {
+      "id": "Al6061T6", "name": "6061-T6", "type": "aluminum",
+      "Fy": 276, "Fu": 310, "F_EXX": 240, "unit": "MPa",
+      "chemistry": { "Mg": 1.0, "Si": 0.6, "Cu": 0.28, "Cr": 0.20 },
+      "requires_pwht": false
+    },
+    {
+      "id": "Al6063T5", "name": "6063-T5", "type": "aluminum",
+      "Fy": 145, "Fu": 186, "F_EXX": 200, "unit": "MPa",
+      "chemistry": { "Mg": 0.7, "Si": 0.4 },
+      "requires_pwht": false
+    }
+  ]
+}

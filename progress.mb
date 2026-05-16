@@ -1,0 +1,43 @@
+# PROJECT OVERVIEW
+Vulcan — browser-based welded joint design tool (AWS D1.1 / AISC 360). React 18 + TypeScript + Vite + Tailwind v4 frontend, Pyodide 0.26 runtime, Python engines under `public/python/engines/`. State via Zustand. Phases 1–5 reportedly complete; Phase 6 forensic audit kicked off because input changes (t1, L, etc.) frequently fail to propagate to results.
+
+# ARCHITECTURE
+- Frontend: src/ (App.tsx, components/, stores/, lib/, types/)
+- Stores: pyodideStore, projectStore, resultsStore, uiStore
+- Lib: pyodide.ts (callEngine), fileIO.ts (.vulcan save/load with migration), units.ts
+- Python engines (public/python/engines/): classifier, structural (Elastic TWL + IC), fatigue, distortion, metallurgy, process, symbol
+- Reference data (public/python/data/): aws_d11_annex_k, aws_d11_table_5_7, aws_d11_table_5_8, aisc_360_j2, electrodes_aws_a5, filler_match, materials_steel/aluminum/stainless
+- IPC: callEngine — JS sets input via pyodide.globals, calls Python, retrieves dict result
+
+# CODING PRINCIPLES
+Forensic audit doctrine (Phases A–F): assume everything wrong, verify by hand-calc, no fixes until user reviews AUDIT_REPORT.md in Phase G.
+
+# CURRENT STATE
+Phase 6 Forensic Audit — Fix batch #1–4 COMPLETE. All 7 Critical findings + C-003 + C-103 fixed (9 fixes total). 7 findings deferred to follow-up PRs (Major UI + Minor cleanup). Regression tests `public/python/tests/test_audit_phase_b.py` — 8/8 pass. `tsc --noEmit` clean. Browser smoke test not yet performed by user.
+
+Fixed: C-001, C-003, C-005, C-007, C-101, C-102, C-103, C-202, C-203.
+Deferred (need user direction): C-002, C-004, C-006, C-008, C-104, C-201, C-301.
+
+# TASKS
+## Completed
+- Phases 1–5 (per PROGRESS.md)
+- Phase A–F: full audit, deliverables in `audit/`
+- Phase G batch 1: IPC race (C-101, C-102) — pyodide.ts serializes + AbortSignal + per-call global
+- Phase G batch 2: T-joint and Cruciform axis swap (C-001) + thermal constants (C-202, C-203)
+- Phase G batch 3: Cooling-time Rosenthal formula (C-007)
+- Phase G batch 4: Cat F slope (C-005)
+- Bonus: C-003 (IC governing), C-103 (WeldSymbolPreview debounce)
+- `audit/POST_FIX_VERIFICATION.md`
+
+## In Progress
+- (none — awaiting user verification on live deployment)
+
+## Remaining
+- Phase H final: browser smoke test by user (start dev server, change t1/L rapidly, confirm utilization updates)
+- PR-B: C-002, C-004, C-006, C-008 (UI additions)
+- PR-C: C-201 unit-toggle plumbing
+- PR-D: C-104, C-301 cleanup
+
+# NOTES / OPEN QUESTIONS
+- Existing PROGRESS.md kept as-is; this progress.mb is the audit-cycle file.
+- User-reported symptom: changing t1 / L sometimes fails to update utilization. Likely candidates: stale closure, hash function omitting field, missing AbortController, Pyodide global state contamination, debounce dropping last event.

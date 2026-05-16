@@ -1,0 +1,16 @@
+{
+  "code_revision": "AISC 360-22",
+  "ASD": {
+    "F_w_coefficient": 0.30,
+    "description": "F_w = 0.30 * F_EXX (ASD allowable shear stress on effective throat)"
+  },
+  "LRFD": {
+    "phi": 0.75,
+    "F_w_coefficient": 0.60,
+    "description": "F_w = 0.75 * 0.60 * F_EXX (LRFD design strength)"
+  },
+  "direction_of_load": {
+    "formula": "F_w = 0.60 * F_EXX * (1 + 0.50 * sin(theta)^1.5)",
+    "reference": "AISC 360-22 Eq. J2-5"
+  }
+}

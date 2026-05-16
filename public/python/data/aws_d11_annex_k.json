@@ -1,0 +1,11 @@
+{
+  "code_revision": "AWS D1.1:2020 Annex K",
+  "A":        { "Cf_MPa": 8.20e12, "m": 3, "threshold_MPa": 165, "description": "Smooth base metal, no attachments" },
+  "B":        { "Cf_MPa": 3.93e12, "m": 3, "threshold_MPa": 110, "description": "CJP groove weld, ground flush, parallel to stress" },
+  "B_prime":  { "Cf_MPa": 2.00e12, "m": 3, "threshold_MPa": 83,  "description": "CJP groove weld, as-welded, parallel to stress" },
+  "C":        { "Cf_MPa": 1.44e12, "m": 3, "threshold_MPa": 69,  "description": "CJP groove transverse; fillet with transverse stiffeners" },
+  "D":        { "Cf_MPa": 7.21e11, "m": 3, "threshold_MPa": 48,  "description": "PJP transverse; fillet welds parallel >50mm long" },
+  "E":        { "Cf_MPa": 3.61e11, "m": 3, "threshold_MPa": 31,  "description": "Fillet welded lateral attachments" },
+  "E_prime":  { "Cf_MPa": 1.28e11, "m": 3, "threshold_MPa": 18,  "description": "Fillet welds, attachments >100mm long" },
+  "F":        { "Cf_MPa": 8.90e15, "m": 4.5, "threshold_MPa": 55, "description": "Fillet welds in shear, transverse loading (m=4.5 slope, ksi^4.5 basis)" }
+}

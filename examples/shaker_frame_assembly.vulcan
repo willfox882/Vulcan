@@ -1,0 +1,175 @@
+{
+  "metadata": {
+    "name": "Shaker Frame Assembly",
+    "version": "2.0",
+    "createdAt": "2026-05-07T00:00:00.000Z",
+    "modifiedAt": "2026-05-07T00:00:00.000Z"
+  },
+  "joints": [
+    {
+      "id": "j-001",
+      "name": "WLD-001",
+      "type": "t_joint",
+      "geometry": {
+        "type": "t_joint",
+        "webThickness": 10,
+        "flangeThickness": 12,
+        "jointLength": 300,
+        "weldSize": 6
+      },
+      "material": {
+        "id": "A572-50",
+        "name": "ASTM A572 Gr 50",
+        "type": "carbon_steel",
+        "Fy": 345,
+        "Fu": 450,
+        "F_EXX": 483,
+        "unit": "MPa"
+      },
+      "loadCases": [
+        {
+          "id": "lc-001",
+          "name": "Static Dead Load",
+          "type": "static",
+          "category": "D",
+          "forces": {
+            "Fx": 0,
+            "Fy": -8000,
+            "Fz": 0,
+            "Mx": 0,
+            "My": 0,
+            "Mz": 300000
+          }
+        },
+        {
+          "id": "lc-002",
+          "name": "25 Hz Operating (8 hr/day)",
+          "type": "cyclic",
+          "stressRangeMPa": 45,
+          "frequencyHz": 25,
+          "hoursPerDay": 8,
+          "daysPerYear": 250
+        }
+      ],
+      "service": {
+        "codeBasis": "ASD",
+        "designLife": 20,
+        "operatingFrequency": 25,
+        "position": "1F",
+        "environment": "shop",
+        "productionVolume": "repeat",
+        "qualityLevel": "structural"
+      }
+    },
+    {
+      "id": "j-002",
+      "name": "WLD-002",
+      "type": "corner_joint",
+      "geometry": {
+        "type": "corner_joint",
+        "plate1Thickness": 10,
+        "plate2Thickness": 10,
+        "jointLength": 200,
+        "cornerAngle": 90,
+        "weldConfig": "both",
+        "weldSizeInside": 6,
+        "weldSizeOutside": 6
+      },
+      "material": {
+        "id": "A572-50",
+        "name": "ASTM A572 Gr 50",
+        "type": "carbon_steel",
+        "Fy": 345,
+        "Fu": 450,
+        "F_EXX": 483,
+        "unit": "MPa"
+      },
+      "loadCases": [
+        {
+          "id": "lc-001",
+          "name": "Static Dead Load",
+          "type": "static",
+          "category": "D",
+          "forces": {
+            "Fx": 0,
+            "Fy": -5000,
+            "Fz": 0,
+            "Mx": 0,
+            "My": 0,
+            "Mz": 150000
+          }
+        },
+        {
+          "id": "lc-002",
+          "name": "25 Hz Operating (8 hr/day)",
+          "type": "cyclic",
+          "stressRangeMPa": 38,
+          "frequencyHz": 25,
+          "hoursPerDay": 8,
+          "daysPerYear": 250
+        }
+      ],
+      "service": {
+        "codeBasis": "ASD",
+        "designLife": 20,
+        "operatingFrequency": 25,
+        "position": "2F",
+        "environment": "shop",
+        "productionVolume": "repeat",
+        "qualityLevel": "structural"
+      }
+    },
+    {
+      "id": "j-003",
+      "name": "WLD-003",
+      "type": "butt_joint",
+      "geometry": {
+        "type": "butt_joint",
+        "plate1Thickness": 10,
+        "plate2Thickness": 10,
+        "grooveType": "v_groove",
+        "grooveAngle": 60,
+        "rootOpening": 3,
+        "rootFace": 2,
+        "penetration": "full"
+      },
+      "material": {
+        "id": "A572-50",
+        "name": "ASTM A572 Gr 50",
+        "type": "carbon_steel",
+        "Fy": 345,
+        "Fu": 450,
+        "F_EXX": 483,
+        "unit": "MPa"
+      },
+      "loadCases": [
+        {
+          "id": "lc-001",
+          "name": "End Plate Static",
+          "type": "static",
+          "category": "O",
+          "forces": {
+            "Fx": 15000,
+            "Fy": 0,
+            "Fz": 0,
+            "Mx": 0,
+            "My": 0,
+            "Mz": 200000
+          }
+        }
+      ],
+      "service": {
+        "codeBasis": "ASD",
+        "designLife": 20,
+        "operatingFrequency": 0,
+        "position": "1G",
+        "environment": "shop",
+        "productionVolume": "repeat",
+        "qualityLevel": "code"
+      }
+    }
+  ],
+  "activeJointId": "j-001",
+  "customMaterials": [],
+  "loadCaseLibrary": []
+}

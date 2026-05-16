@@ -1,0 +1,23 @@
+{
+  "code_revision": "2024",
+  "materials": [
+    {
+      "id": "SS304L", "name": "304L Stainless", "type": "stainless",
+      "Fy": 170, "Fu": 485, "F_EXX": 485, "unit": "MPa",
+      "chemistry": { "C": 0.03, "Mn": 2.0, "Si": 0.75, "Cr": 19.0, "Ni": 10.0, "Mo": 0, "N": 0.10 },
+      "requires_pwht": false
+    },
+    {
+      "id": "SS316L", "name": "316L Stainless", "type": "stainless",
+      "Fy": 170, "Fu": 485, "F_EXX": 515, "unit": "MPa",
+      "chemistry": { "C": 0.03, "Mn": 2.0, "Si": 0.75, "Cr": 17.0, "Ni": 12.0, "Mo": 2.5, "N": 0.10 },
+      "requires_pwht": false
+    },
+    {
+      "id": "SS2205", "name": "2205 Duplex", "type": "stainless",
+      "Fy": 450, "Fu": 620, "F_EXX": 690, "unit": "MPa",
+      "chemistry": { "C": 0.03, "Mn": 2.0, "Si": 1.0, "Cr": 22.0, "Ni": 5.5, "Mo": 3.0, "N": 0.14 },
+      "requires_pwht": false
+    }
+  ]
+}

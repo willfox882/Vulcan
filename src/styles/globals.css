@@ -1,0 +1,62 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap");
+
+@config "../../tailwind.config.js";
+@import "tailwindcss";
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #0a0a0a;
+  color: #fafafa;
+  font-family: Inter, system-ui, sans-serif;
+  margin: 0;
+  overflow: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+
+@media print {
+  body > * { visibility: hidden; }
+  .report-output, .report-output * { visibility: visible; }
+  .report-output { position: fixed; left: 0; top: 0; width: 100%; }
+  @page { size: A4; margin: 18mm; }
+  .page-break { page-break-before: always; }
+  .no-print { display: none !important; }
+}
+
+/* Dropdown options — force black text on white native background */
+select option {
+  background-color: #ffffff;
+  color: #111111;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Focus rings — visible on keyboard nav, hidden on click */
+:focus-visible {
+  outline: 2px solid #dc2626;
+  outline-offset: 2px;
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}

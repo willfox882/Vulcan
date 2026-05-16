@@ -1,0 +1,53 @@
+{
+  "code_revision": "2024",
+  "materials": [
+    {
+      "id": "A36", "name": "ASTM A36", "type": "carbon_steel",
+      "Fy": 250, "Fu": 400, "F_EXX": 483, "unit": "MPa",
+      "CE_IIW_approx": 0.40, "recommended_electrode": "E70XX",
+      "aws_table_5_8_category": "I",
+      "chemistry": { "C": 0.26, "Mn": 0.80, "Si": 0.40, "P": 0.04, "S": 0.05, "Cr": 0, "Ni": 0, "Cu": 0.20, "Mo": 0, "V": 0, "B": 0 },
+      "requires_pwht": false
+    },
+    {
+      "id": "A572-50", "name": "ASTM A572 Gr 50", "type": "carbon_steel",
+      "Fy": 345, "Fu": 450, "F_EXX": 483, "unit": "MPa",
+      "CE_IIW_approx": 0.43, "recommended_electrode": "E70XX",
+      "aws_table_5_8_category": "II",
+      "chemistry": { "C": 0.23, "Mn": 1.35, "Si": 0.40, "P": 0.04, "S": 0.05, "Cr": 0, "Ni": 0, "Cu": 0, "Mo": 0, "V": 0.11, "B": 0 },
+      "requires_pwht": false
+    },
+    {
+      "id": "A588", "name": "ASTM A588 (weathering)", "type": "carbon_steel",
+      "Fy": 345, "Fu": 485, "F_EXX": 483, "unit": "MPa",
+      "CE_IIW_approx": 0.47, "recommended_electrode": "E70XX-W",
+      "aws_table_5_8_category": "IV",
+      "chemistry": { "C": 0.19, "Mn": 1.25, "Si": 0.75, "P": 0.04, "S": 0.05, "Cr": 0.65, "Ni": 0.40, "Cu": 0.40, "Mo": 0, "V": 0.065, "B": 0 },
+      "requires_pwht": false
+    },
+    {
+      "id": "A514", "name": "ASTM A514 (t ≤ 65mm)", "type": "carbon_steel",
+      "Fy": 690, "Fu": 760, "F_EXX": 758, "unit": "MPa",
+      "CE_IIW_approx": 0.65, "recommended_electrode": "E110XX",
+      "aws_table_5_8_category": "III",
+      "chemistry": { "C": 0.21, "Mn": 0.95, "Si": 0.35, "P": 0.035, "S": 0.04, "Cr": 0.50, "Ni": 0.80, "Cu": 0, "Mo": 0.55, "V": 0.05, "B": 0.003 },
+      "requires_pwht": true
+    },
+    {
+      "id": "S235JR", "name": "S235JR (EN 10025)", "type": "carbon_steel",
+      "Fy": 235, "Fu": 360, "F_EXX": 483, "unit": "MPa",
+      "CE_IIW_approx": 0.35, "recommended_electrode": "E42XX",
+      "aws_table_5_8_category": "I",
+      "chemistry": { "C": 0.17, "Mn": 1.40, "Si": 0.35, "P": 0.04, "S": 0.04, "Cr": 0, "Ni": 0, "Cu": 0, "Mo": 0, "V": 0, "B": 0 },
+      "requires_pwht": false
+    },
+    {
+      "id": "S355", "name": "S355 (EN 10025)", "type": "carbon_steel",
+      "Fy": 355, "Fu": 470, "F_EXX": 483, "unit": "MPa",
+      "CE_IIW_approx": 0.45, "recommended_electrode": "E50XX",
+      "aws_table_5_8_category": "II",
+      "chemistry": { "C": 0.20, "Mn": 1.60, "Si": 0.55, "P": 0.035, "S": 0.035, "Cr": 0, "Ni": 0, "Cu": 0, "Mo": 0, "V": 0.10, "B": 0 },
+      "requires_pwht": false
+    }
+  ]
+}

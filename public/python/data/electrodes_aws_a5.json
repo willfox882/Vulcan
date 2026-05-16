@@ -1,0 +1,50 @@
+{
+  "code_revision": "AWS A5.1/A5.18/A5.20:2023",
+  "electrodes": [
+    {
+      "classification": "E70XX",
+      "process": "SMAW",
+      "F_EXX_ksi": 70,
+      "F_EXX_MPa": 483,
+      "Fy_min_MPa": 400,
+      "Fu_min_MPa": 483,
+      "compatible_base": ["A36","A572-50","A588","S235JR","S355"]
+    },
+    {
+      "classification": "E80XX",
+      "process": "SMAW",
+      "F_EXX_ksi": 80,
+      "F_EXX_MPa": 552,
+      "Fy_min_MPa": 470,
+      "Fu_min_MPa": 552,
+      "compatible_base": ["A572-50","A588"]
+    },
+    {
+      "classification": "E110XX",
+      "process": "SMAW",
+      "F_EXX_ksi": 110,
+      "F_EXX_MPa": 758,
+      "Fy_min_MPa": 690,
+      "Fu_min_MPa": 758,
+      "compatible_base": ["A514"]
+    },
+    {
+      "classification": "ER70S-6",
+      "process": "GMAW",
+      "F_EXX_ksi": 70,
+      "F_EXX_MPa": 483,
+      "Fy_min_MPa": 400,
+      "Fu_min_MPa": 483,
+      "compatible_base": ["A36","A572-50","S235JR","S355"]
+    },
+    {
+      "classification": "E71T-1",
+      "process": "FCAW",
+      "F_EXX_ksi": 70,
+      "F_EXX_MPa": 483,
+      "Fy_min_MPa": 400,
+      "Fu_min_MPa": 483,
+      "compatible_base": ["A36","A572-50","S235JR","S355"]
+    }
+  ]
+}
