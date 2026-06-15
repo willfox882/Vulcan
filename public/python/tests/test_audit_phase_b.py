@@ -82,6 +82,75 @@ def test_b4_out_of_plane_bending():
     assert _approx(res["utilization_pct"], 81.3, 0.02), f"util={res['utilization_pct']}"
 
 
+def test_fx_longitudinal_shear_not_ignored_tjoint():
+    """Regression for H2: a pure Fx (along-weld) load must produce stress,
+    not a false ADEQUATE. By symmetry of pure direct shear, |Fx| yields the
+    same resultant as the equivalent |Fy|."""
+    loads_fx = {"Fx": -10000, "Fy": 0, "Fz": 0, "Mx": 0, "My": 0, "Mz": 0}
+    res_fx = structural._elastic_twl_t_joint(JOINT, MATERIAL, loads_fx, SERVICE)
+    assert res_fx["f_R"] > 0 and res_fx["utilization_pct"] > 0, "Fx was ignored"
+    assert _approx(res_fx["f_R"], 11.79, 0.01), f"f_R={res_fx['f_R']}"
+
+    loads_fy = {"Fx": 0, "Fy": -10000, "Fz": 0, "Mx": 0, "My": 0, "Mz": 0}
+    res_fy = structural._elastic_twl_t_joint(JOINT, MATERIAL, loads_fy, SERVICE)
+    assert _approx(res_fx["f_R"], res_fy["f_R"], 0.001)
+
+
+def test_fx_plus_fy_combine_in_quadrature_tjoint():
+    """Orthogonal in-plane direct shears combine by SRSS."""
+    loads = {"Fx": -10000, "Fy": -10000, "Fz": 0, "Mx": 0, "My": 0, "Mz": 0}
+    res = structural._elastic_twl_t_joint(JOINT, MATERIAL, loads, SERVICE)
+    # q_vx = q_vy = 50 N/mm, q_R = 50*sqrt2 = 70.71, a = 4.2426 -> 16.67 MPa
+    assert _approx(res["f_R"], 16.67, 0.01), f"f_R={res['f_R']}"
+    assert _approx(res["f_v"], 16.67, 0.01), f"f_v={res['f_v']}"
+
+
+def test_fx_not_ignored_lap_and_corner():
+    """H2 must hold for lap and corner joints too."""
+    lap = {"type": "lap_joint", "plate1Thickness": 12, "plate2Thickness": 12,
+           "overlapLength": 150, "weldSize": 8}
+    fx = {"Fx": -10000, "Fy": 0, "Fz": 0, "Mx": 0, "My": 0, "Mz": 0}
+    fy = {"Fx": 0, "Fy": -10000, "Fz": 0, "Mx": 0, "My": 0, "Mz": 0}
+    lap_fx = structural._elastic_twl_lap(lap, MATERIAL, fx, SERVICE)
+    lap_fy = structural._elastic_twl_lap(lap, MATERIAL, fy, SERVICE)
+    assert lap_fx["f_R"] > 0, "Fx ignored on lap joint"
+    assert _approx(lap_fx["f_R"], lap_fy["f_R"], 0.001)
+
+    corner = {"type": "corner_joint", "plate1Thickness": 12, "plate2Thickness": 12,
+              "jointLength": 300, "weldConfig": "both", "weldSizeInside": 8,
+              "weldSizeOutside": 6}
+    cor_fx = structural._elastic_twl_corner(corner, MATERIAL, fx, SERVICE)
+    assert cor_fx["f_R"] > 0, "Fx ignored on corner joint"
+
+
+def test_butt_axial_plus_bending_adds_not_srss():
+    """Regression for H3: axial + bending are collinear normal stresses and
+    must add algebraically. SRSS (the previous behaviour) under-predicts."""
+    joint = {"type": "butt_joint", "plate1Thickness": 12, "plate2Thickness": 12,
+             "penetration": "full", "jointLength": 300}
+    loads = {"Fx": 0, "Fy": -50000, "Fz": 0, "Mx": 500000, "My": 0, "Mz": 0}
+    res = structural._butt_joint_analysis(
+        joint, {"F_EXX": 483, "Fy": 250}, loads, {"codeBasis": "ASD"})
+    s = res["structural_governing"]
+    # f_direct = 50000/3600 = 13.889 ; f_bending = 500000*6/43200 = 69.444
+    # correct (algebraic) sum = 83.33 ; old SRSS would give 70.81
+    assert _approx(s["f_R"], 83.33, 0.01), f"f_R={s['f_R']}"
+    assert s["f_R"] > 70.81, "SRSS regression — normal stresses not added"
+    assert _approx(s["f_v"], 13.89, 0.01) and _approx(s["f_b"], 69.44, 0.01)
+
+
+def test_butt_transverse_shear_counted():
+    """L1: transverse shear Fz must contribute (von Mises)."""
+    joint = {"type": "butt_joint", "plate1Thickness": 12, "plate2Thickness": 12,
+             "penetration": "full", "jointLength": 300}
+    loads = {"Fx": 0, "Fy": 0, "Fz": 50000, "Mx": 0, "My": 0, "Mz": 0}
+    res = structural._butt_joint_analysis(
+        joint, {"F_EXX": 483, "Fy": 250}, loads, {"codeBasis": "ASD"})
+    s = res["structural_governing"]
+    # f_shear = 50000/3600 = 13.889 ; von Mises = sqrt(3)*13.889 = 24.06
+    assert _approx(s["f_R"], 24.06, 0.01), f"f_R={s['f_R']}"
+
+
 def test_b5_fatigue_cat_e_constant_amplitude():
     """Test 5: Cat E, Δσ=60 MPa → N_f ≈ 1.671e6 cycles."""
     res = fatigue.analyze_fatigue({
@@ -102,6 +171,75 @@ def test_b6_fatigue_below_threshold():
     })
     assert res["below_threshold"] is True
     assert res["cycles_to_failure"] == float("inf")
+
+
+def _vulcan_sanitize(o):
+    """Mirror of _vulcan_sanitize in src/lib/pyodide.ts — keep in sync.
+
+    Replaces non-finite floats with sentinel strings so the result survives a
+    strict JSON encoder (JS JSON.parse rejects bare Infinity/NaN tokens).
+    """
+    if isinstance(o, float):
+        if math.isinf(o):
+            return "__Infinity__" if o > 0 else "__-Infinity__"
+        if math.isnan(o):
+            return "__NaN__"
+        return o
+    if isinstance(o, dict):
+        return {k: _vulcan_sanitize(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [_vulcan_sanitize(v) for v in o]
+    return o
+
+
+def _vulcan_revive(o):
+    """Mirror of the JSON.parse reviver in pyodide.ts."""
+    if o == "__Infinity__":
+        return float("inf")
+    if o == "__-Infinity__":
+        return float("-inf")
+    if o == "__NaN__":
+        return float("nan")
+    if isinstance(o, dict):
+        return {k: _vulcan_revive(v) for k, v in o.items()}
+    if isinstance(o, list):
+        return [_vulcan_revive(v) for v in o]
+    return o
+
+
+def test_transport_infinite_fatigue_survives_strict_json():
+    """Regression for C1: fatigue infinite-life (inf) must cross the JSON
+    transport. Raw json.dumps emits the bare token Infinity, which JS
+    JSON.parse rejects. The sanitize/revive pair must round-trip it.
+
+    json.dumps(allow_nan=False) raises on any residual inf/nan, so it is a
+    faithful proxy for the browser's strict parser.
+    """
+    import json
+    res = fatigue.analyze_fatigue({
+        "joint": {"type": "t_joint"},
+        "structural": {"load_direction": "transverse"},
+        "fatigue": {"type": "constant_amplitude", "stress_range_MPa": 20.0},
+    })
+    # The engine genuinely produces non-finite values here.
+    assert res["cycles_to_failure"] == float("inf")
+    assert res["safety_factor"] == float("inf")
+
+    # Raw dumps emits the bare token Infinity, which a strict parser rejects.
+    raw = json.dumps({"ok": True, "data": res})
+    assert ": Infinity" in raw  # bare, unquoted token — the hazard
+
+    # The sanitized encode must contain no bare non-finite tokens. allow_nan
+    # =False raises on any residual inf/nan, so a successful dump is the proof
+    # (sentinels are quoted strings, which are valid JSON).
+    safe = json.dumps(_vulcan_sanitize({"ok": True, "data": res}), allow_nan=False)
+    assert ": Infinity" not in safe and ": NaN" not in safe
+
+    # And the JS-side reviver restores the original infinities.
+    restored = _vulcan_revive(json.loads(safe))
+    assert restored["data"]["cycles_to_failure"] == float("inf")
+    assert restored["data"]["safety_factor"] == float("inf")
+    assert restored["data"]["below_threshold"] is True
 
 
 def test_b7_miner_variable_amplitude():

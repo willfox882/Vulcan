@@ -11,7 +11,32 @@ export async function initializePyodide(
   onProgress("Installing NumPy and SciPy...");
   await pyodide.loadPackage(["numpy", "scipy"]);
 
-  await pyodide.runPythonAsync(`_tables = {}`);
+  // Global reference-data dict + a JSON encoder that survives non-finite
+  // floats. Python's json.dumps emits the bare tokens Infinity / -Infinity /
+  // NaN, which JSON.parse rejects — so we encode them as sentinel strings and
+  // revive them on the JS side (see callEngine). This protects every engine,
+  // e.g. fatigue returning float("inf") for infinite life.
+  await pyodide.runPythonAsync(`
+import json as _json, math as _math
+
+_tables = {}
+
+def _vulcan_sanitize(o):
+    if isinstance(o, float):
+        if _math.isinf(o):
+            return "__Infinity__" if o > 0 else "__-Infinity__"
+        if _math.isnan(o):
+            return "__NaN__"
+        return o
+    if isinstance(o, dict):
+        return {k: _vulcan_sanitize(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [_vulcan_sanitize(v) for v in o]
+    return o
+
+def _vulcan_safe_dumps(o):
+    return _json.dumps(_vulcan_sanitize(o))
+`);
 
   onProgress("Loading reference data...");
   const dataFiles = [
@@ -74,15 +99,20 @@ export async function callEngine<T>(
 import json as _json, traceback as _tb
 try:
     _result = ${functionName}(_json.loads(${key}))
-    _out = _json.dumps({"ok": True, "data": _result})
+    _out = _vulcan_safe_dumps({"ok": True, "data": _result})
 except Exception as _e:
-    _out = _json.dumps({"ok": False, "error": str(_e), "trace": _tb.format_exc()})
+    _out = _vulcan_safe_dumps({"ok": False, "error": str(_e), "trace": _tb.format_exc()})
 _out
 `)) as string;
 
       if (signal?.aborted) throw new AbortedError();
 
-      const result = JSON.parse(resultJson) as {
+      const result = JSON.parse(resultJson, (_k, v) =>
+        v === "__Infinity__" ? Infinity
+        : v === "__-Infinity__" ? -Infinity
+        : v === "__NaN__" ? NaN
+        : v
+      ) as {
         ok: boolean;
         data?: T;
         error?: string;

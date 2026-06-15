@@ -82,6 +82,7 @@ def _elastic_twl_t_joint(joint, material, loads, service):
     J_u = I_ux + I_uy
 
     a = 0.707 * w
+    Fx = loads.get("Fx", 0.0)
     Fy = loads.get("Fy", 0.0)
     Fz = loads.get("Fz", 0.0)
     Mx = loads.get("Mx", 0.0)
@@ -91,6 +92,7 @@ def _elastic_twl_t_joint(joint, material, loads, service):
     # Corner coordinate convention: rx = along weld (= ±L/2),
     #                                ry = across web (= ±t1/2).
     # Direct shears are uniform line loads along their force axis:
+    #   Fx is a longitudinal (along-weld) load → contributes to q_along (x-axis)
     #   Fy is a transverse (across-web) load  → contributes to q_across (y-axis)
     #   Fz is an out-of-plane (peel) load     → contributes to q_peel  (z-axis)
     # Torsion Mz creates an in-plane shear tangent to the position vector:
@@ -98,6 +100,7 @@ def _elastic_twl_t_joint(joint, material, loads, service):
     #   q_ty (across web) = +Mz·rx / J_u
     # Bending Mx (out-of-plane) at extreme fibre c = t1/2 produces a peel
     # stress on the throat (q_peel), not an in-plane component.
+    q_vx = Fx / L_total              # along-weld direct shear
     q_vy = Fy / L_total              # across-web direct shear
     q_vz = Fz / L_total              # peel direct shear
     c_x = t1 / 2.0
@@ -111,7 +114,7 @@ def _elastic_twl_t_joint(joint, material, loads, service):
     for (rx, ry) in corners:
         q_tx = -Mz * ry / J_u if J_u > 0 else 0.0
         q_ty =  Mz * rx / J_u if J_u > 0 else 0.0
-        q_along  = q_tx + q_by              # along-weld (x) components
+        q_along  = q_tx + q_by + q_vx       # along-weld (x) components
         q_across = q_ty + q_vy              # across-web (y) components
         q_peel   = q_vz + q_bx              # out-of-plane (z) components
         q_R = np.sqrt(q_along**2 + q_across**2 + q_peel**2)
@@ -128,7 +131,7 @@ def _elastic_twl_t_joint(joint, material, loads, service):
 
     return {
         "method": "Elastic TWL",
-        "f_v": round(abs(q_vy) / a, 2) if a > 0 else 0.0,
+        "f_v": round(math.hypot(q_vx, q_vy) / a, 2) if a > 0 else 0.0,
         "f_t": round(f_t_val, 2),
         "f_b": round(f_b_val, 2),
         "f_R": round(f_R, 2),
@@ -149,6 +152,13 @@ def _ic_method_t_joint(joint, material, loads, service):
     """
     Instantaneous Center method (AISC Manual Part 8 / Tide) for T-joint
     under combined in-plane shear Fy + torsion Mz.
+
+    Note: this formulation handles the vertical shear Fy at eccentricity
+    e = Mz/Fy only. Longitudinal shear (Fx), peel (Fz) and out-of-plane
+    bending (Mx) are not modelled here — they are fully captured by the
+    Elastic TWL method, and analyze_joint() reports the larger (more
+    conservative) utilization of the two, so those components are never
+    silently dropped from the governing check.
     """
     t1 = joint["webThickness"]
     L = joint["jointLength"]
@@ -198,23 +208,27 @@ def _elastic_twl_lap(joint, material, loads, service):
     L_total = 2.0 * L_j
     a = 0.707 * w
 
+    Fx = loads.get("Fx", 0.0)
     Fy = loads.get("Fy", 0.0)
     Fz = loads.get("Fz", 0.0)
     Mz = loads.get("Mz", 0.0)
 
-    q_vy = Fy / L_total
-    q_vz = Fz / L_total
+    q_vx = Fx / L_total              # along-weld direct shear (longitudinal)
+    q_vy = Fy / L_total              # across-weld in-plane direct shear
+    q_vz = Fz / L_total              # out-of-plane (peel) direct shear
 
-    # Peel stress from eccentricity
+    # Peel stress from eccentricity of the in-plane load through the overlap
     e = t1 / 2.0 + t2 / 2.0
-    M_peel = abs(Fy) * e
+    M_peel = math.hypot(Fx, Fy) * e
     I_u = 2.0 * (L_j**3 / 12.0)
     J_u = I_u
 
     q_peel = M_peel * (L_j / 2.0) / I_u if I_u > 0 else 0.0
     q_t = abs(Mz) * (L_j / 2.0) / J_u if J_u > 0 else 0.0
 
-    q_R = np.sqrt((abs(q_vy) + q_t)**2 + (abs(q_vz) + q_peel)**2)
+    # Combine the two orthogonal in-plane direct shears, then add torsion.
+    q_v_inplane = math.hypot(q_vx, q_vy)
+    q_R = np.sqrt((q_v_inplane + q_t)**2 + (abs(q_vz) + q_peel)**2)
     f_R = q_R / a if a > 0 else 0.0
 
     F_w_allow = _allowable_stress(service, F_EXX)
@@ -223,7 +237,7 @@ def _elastic_twl_lap(joint, material, loads, service):
 
     return {
         "method": "Elastic TWL",
-        "f_v": round(abs(q_vy) / a, 2) if a > 0 else 0.0,
+        "f_v": round(q_v_inplane / a, 2) if a > 0 else 0.0,
         "f_t": round(q_t / a, 2) if a > 0 else 0.0,
         "f_b": round(q_peel / a, 2) if a > 0 else 0.0,
         "f_R": round(f_R, 2),
@@ -295,9 +309,16 @@ def _butt_joint_analysis(joint, material, loads, service):
 
     if penetration == "full":
         A_w = t * L_j
+        # Axial (Fy) and bending (Mx) are both normal stresses acting on the
+        # same weld fibre — they superpose algebraically, NOT by SRSS. Using
+        # SRSS here would under-predict the peak normal stress (unconservative).
         f_direct = abs(Fy_load) / A_w if A_w > 0 else 0.0
         f_bending = abs(Mx) * (t / 2.0) / (L_j * t**3 / 12.0) if L_j > 0 else 0.0
-        f_R = np.sqrt(f_direct**2 + f_bending**2)
+        f_normal = f_direct + f_bending
+        # Transverse shear (Fz) across the weld area, combined with the normal
+        # stress through the von Mises (distortion-energy) criterion.
+        f_shear = abs(Fz_load) / A_w if A_w > 0 else 0.0
+        f_R = math.sqrt(f_normal**2 + 3.0 * f_shear**2)
         utilization = f_R / F_allow if F_allow > 0 else 0.0
         w_required = t
         w_provided = t
@@ -313,8 +334,9 @@ def _butt_joint_analysis(joint, material, loads, service):
 
     elastic = {
         "method": "Groove Weld",
-        "f_v": round(f_R, 2),
-        "f_t": 0.0, "f_b": 0.0,
+        "f_v": round(f_direct, 2) if penetration == "full" else round(f_R, 2),
+        "f_t": 0.0,
+        "f_b": round(f_bending, 2) if penetration == "full" else 0.0,
         "f_R": round(f_R, 2),
         "F_w_allow": round(F_allow, 2),
         "utilization": round(utilization, 4),
@@ -356,17 +378,20 @@ def _elastic_twl_corner(joint, material, loads, service):
     L_total = n_welds * L_j
     F_EXX = material.get("F_EXX", 483)
 
+    Fx = loads.get("Fx", 0.0)
     Fy = loads.get("Fy", 0.0)
     Fz = loads.get("Fz", 0.0)
     Mz = loads.get("Mz", 0.0)
 
     a = 0.707 * w
+    q_vx = Fx / L_total if L_total > 0 else 0.0
     q_vy = Fy / L_total if L_total > 0 else 0.0
     q_vz = Fz / L_total if L_total > 0 else 0.0
     I_u = n_welds * (L_j**3 / 12.0)
     J_u = I_u
     q_t = abs(Mz) * (L_j / 2.0) / J_u if J_u > 0 else 0.0
-    q_R = np.sqrt((abs(q_vy) + q_t)**2 + abs(q_vz)**2)
+    q_v_inplane = math.hypot(q_vx, q_vy)
+    q_R = np.sqrt((q_v_inplane + q_t)**2 + abs(q_vz)**2)
     f_R = q_R / a if a > 0 else 0.0
 
     F_w_allow = _allowable_stress(service, F_EXX)
@@ -375,7 +400,7 @@ def _elastic_twl_corner(joint, material, loads, service):
 
     return {
         "method": "Elastic TWL",
-        "f_v": round(abs(q_vy) / a, 2) if a > 0 else 0.0,
+        "f_v": round(q_v_inplane / a, 2) if a > 0 else 0.0,
         "f_t": round(q_t / a, 2) if a > 0 else 0.0,
         "f_b": 0.0,
         "f_R": round(f_R, 2),
@@ -695,10 +720,12 @@ def _elastic_twl_edge(joint, material, loads, service):
     a = 0.707 * w
     A_w = a * L_total
 
+    Fx = loads.get("Fx", 0.0)
     Fy = loads.get("Fy", 0.0)
     Fz = loads.get("Fz", 0.0)
     Mx = loads.get("Mx", 0.0)  # bending pulling the plates apart
 
+    q_vx = Fx / L_total if L_total > 0 else 0.0   # along-weld direct shear
     q_vy = Fy / L_total if L_total > 0 else 0.0
     q_vz = Fz / L_total if L_total > 0 else 0.0
     # Out-of-plane bending — treated as shear on throat
@@ -706,7 +733,7 @@ def _elastic_twl_edge(joint, material, loads, service):
     I_u = L_total * (t_eff / 2.0)**2
     q_bx = Mx * (t_eff / 2.0) / I_u if I_u > 0 else 0.0
 
-    q_R = np.sqrt(q_vy**2 + q_vz**2 + q_bx**2)
+    q_R = np.sqrt(q_vx**2 + q_vy**2 + q_vz**2 + q_bx**2)
     f_R = q_R / a if a > 0 else 0.0
 
     code_basis = service.get("codeBasis", "ASD")
@@ -732,7 +759,7 @@ def _elastic_twl_edge(joint, material, loads, service):
 
     result = {
         "method": "Elastic TWL",
-        "f_v": round(abs(q_vy) / a, 2) if a > 0 else 0.0,
+        "f_v": round(math.hypot(q_vx, q_vy) / a, 2) if a > 0 else 0.0,
         "f_t": 0.0,
         "f_b": round(abs(q_bx) / a, 2) if a > 0 else 0.0,
         "f_R": round(f_R, 2),
@@ -772,12 +799,14 @@ def _elastic_twl_cruciform(joint, material, loads, service):
     I_uy = 4.0 * (L**3 / 12.0)           # about axis perpendicular to welds
     J_u = I_ux + I_uy
 
+    Fx = loads.get("Fx", 0.0)
     Fy = loads.get("Fy", 0.0)
     Fz = loads.get("Fz", 0.0)
     Mx = loads.get("Mx", 0.0)
     Mz = loads.get("Mz", 0.0)
 
     # See _elastic_twl_t_joint for axis convention.
+    q_vx = Fx / L_total if L_total > 0 else 0.0   # along-weld direct shear
     q_vy = Fy / L_total if L_total > 0 else 0.0   # across-web direct shear
     q_vz = Fz / L_total if L_total > 0 else 0.0   # peel direct shear
     q_bx = Mx * (t_web / 2.0) / I_ux if I_ux > 0 else 0.0   # peel from Mx
@@ -790,7 +819,7 @@ def _elastic_twl_cruciform(joint, material, loads, service):
     for (rx, ry) in corners:
         q_tx = -Mz * ry / J_u if J_u > 0 else 0.0
         q_ty =  Mz * rx / J_u if J_u > 0 else 0.0
-        q_along  = q_tx                    # along-weld
+        q_along  = q_tx + q_vx             # along-weld (Fx lives here)
         q_across = q_ty + q_vy             # across-web (Fy lives here)
         q_peel   = q_vz + q_bx             # out-of-plane
         q_R = np.sqrt(q_along**2 + q_across**2 + q_peel**2)
@@ -824,7 +853,7 @@ def _elastic_twl_cruciform(joint, material, loads, service):
 
     result = {
         "method": "Elastic TWL",
-        "f_v": round(abs(q_vy) / a, 2) if a > 0 else 0.0,
+        "f_v": round(math.hypot(q_vx, q_vy) / a, 2) if a > 0 else 0.0,
         "f_t": round(abs(Mz * (t_web/2) / J_u) / a, 2) if (J_u > 0 and a > 0) else 0.0,
         "f_b": round(abs(q_bx) / a, 2) if a > 0 else 0.0,
         "f_R": round(f_R, 2),

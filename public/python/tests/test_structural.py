@@ -6,13 +6,13 @@ import types as _types_mod
 
 # Load reference data
 data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
-with open(os.path.join(data_dir, 'aws_d11_table_5_7.json')) as f:
+with open(os.path.join(data_dir, 'aws_d11_table_5_7.json'), encoding='utf-8') as f:
     aws_table = json.load(f)
-with open(os.path.join(data_dir, 'aws_d11_annex_k.json')) as f:
+with open(os.path.join(data_dir, 'aws_d11_annex_k.json'), encoding='utf-8') as f:
     annex_k = json.load(f)
 
 # Execute structural.py in a namespace that has _tables
-with open(os.path.join(os.path.dirname(__file__), '..', 'engines', 'structural.py')) as f:
+with open(os.path.join(os.path.dirname(__file__), '..', 'engines', 'structural.py'), encoding='utf-8') as f:
     structural_src = f.read()
 
 ns = {"_tables": {"aws_d11_table_5_7": aws_table, "aws_d11_annex_k": annex_k}}
@@ -20,7 +20,7 @@ exec(compile(structural_src, 'structural.py', 'exec'), ns)
 analyze_joint = ns["analyze_joint"]
 
 # Execute fatigue.py in a namespace that has _tables
-with open(os.path.join(os.path.dirname(__file__), '..', 'engines', 'fatigue.py')) as f:
+with open(os.path.join(os.path.dirname(__file__), '..', 'engines', 'fatigue.py'), encoding='utf-8') as f:
     fatigue_src = f.read()
 
 fat_ns = {"_tables": {"aws_d11_table_5_7": aws_table, "aws_d11_annex_k": annex_k}}
