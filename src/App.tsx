@@ -18,6 +18,7 @@ export default function App() {
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [autosaveRecovery, setAutosaveRecovery] = useState<{
     data: string;
     ts: string;
@@ -32,7 +33,8 @@ export default function App() {
   }, [project]);
 
   const handleLoad = useCallback(() => {
-    loadProject(setProject);
+    setLoadError(null);
+    loadProject(setProject, (msg) => setLoadError(msg));
   }, [setProject]);
 
   // Auto-save: debounced 3s after any project change
@@ -214,6 +216,25 @@ export default function App() {
           <ResultsPanel />
         </div>
       </div>
+
+      {/* File load error toast */}
+      {loadError && (
+        <div className="fixed bottom-4 right-4 z-50 bg-bg-elevated border border-semantic-fail/40 rounded-lg p-3 flex items-start gap-3 shadow-lg max-w-sm">
+          <div className="flex-1">
+            <div className="text-semantic-fail text-sm font-medium">
+              Could not open project
+            </div>
+            <div className="text-text-secondary text-xs mt-0.5">{loadError}</div>
+          </div>
+          <button
+            onClick={() => setLoadError(null)}
+            className="text-text-tertiary text-xs hover:text-text-primary transition-colors"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Auto-save recovery toast */}
       {autosaveRecovery && (
