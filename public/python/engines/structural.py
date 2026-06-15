@@ -628,6 +628,11 @@ def _ic_capacity(elements, elem_len, w, F_EXX, Fy, Mz, N_samples=51):
 
     Fv, _ = _force_sums(x_ic)
     P_n = abs(Fv)
+    # An eccentric load can never mobilize more capacity than the concentric
+    # (pure-shear) limit, where every element is fully and simultaneously
+    # mobilized. Cap accordingly to guard against spurious solver roots that
+    # would otherwise report P_n above that physical ceiling.
+    P_n = min(P_n, _ic_capacity_pure_shear(elements, elem_len, w, F_EXX))
     return P_n, x_ic
 
 

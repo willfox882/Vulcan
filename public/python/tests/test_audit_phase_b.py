@@ -355,6 +355,49 @@ def test_m5_tjoint_robust_to_missing_geometry_fields():
     assert math.isfinite(ic["utilization"])
 
 
+def test_ic_method_external_validation():
+    """Item 5: validate the IC method against external / physical anchors.
+
+    (a) Concentric capacity equals the AISC nominal weld strength closed form
+        sum(0.6 * F_EXX * 0.707 w * L).
+    (b) At zero eccentricity the IC allowable load agrees with the independent
+        Elastic TWL allowable (they coincide for concentric shear; residual is
+        display rounding of utilization).
+    (c) Eccentric capacity never exceeds the concentric ceiling (the cap that
+        guards against spurious solver roots).
+
+    Known limitation: P_n is not strictly monotonic in eccentricity across the
+    full range (the consistency root-finder can pick different branches). This
+    is never unsafe — analyze_joint reports max(elastic, ic) utilization, so an
+    over-high IC capacity merely lets Elastic govern — but a full AISC Table
+    8-4 coefficient calibration / IC re-implementation is tracked as future
+    work.
+    """
+    J = {"type": "t_joint", "webThickness": 12, "flangeThickness": 16,
+         "jointLength": 400, "weldSize": 8}
+    M = {"F_EXX": 483}
+    S = {"codeBasis": "ASD"}
+
+    ic0 = structural._ic_method_t_joint(J, M, {"Fy": -10000, "Mz": 0}, S)
+    conc = ic0["P_capacity_N"]
+
+    # (a) AISC nominal weld strength: 0.6 * F_EXX * throat * total length.
+    closed_form = 0.60 * 483 * 0.707 * 8 * (2 * 400)
+    assert _approx(conc, closed_form, 0.001), (conc, closed_form)
+
+    # (b) IC allowable == Elastic allowable at e = 0.
+    el = structural._elastic_twl_t_joint(J, M, {"Fy": -10000}, S)
+    p_allow_elastic = 10000 / el["utilization"]
+    assert _approx(ic0["P_allow_N"], p_allow_elastic, 0.01), \
+        (ic0["P_allow_N"], p_allow_elastic)
+
+    # (c) eccentric capacity bounded by the concentric ceiling.
+    for Mz in (100_000, 500_000, 1_000_000, 2_000_000, 4_000_000):
+        pn = structural._ic_method_t_joint(
+            J, M, {"Fy": -10000, "Mz": Mz}, S)["P_capacity_N"]
+        assert pn <= conc + 1.0, f"Mz={Mz}: Pn={pn} exceeds concentric {conc}"
+
+
 def test_b11_cooling_time_3d_regime():
     """Test 11: t8/5 in 3D regime with Q=1.5 kJ/mm, T0=100°C → ≈6.4 s.
 
