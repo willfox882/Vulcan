@@ -1,5 +1,7 @@
 import type { Joint, AnalysisResult } from "../../types";
 import type { ReportSettings } from "../../stores/uiStore";
+import { useProjectStore } from "../../stores/projectStore";
+import { formatQty, toDisplay, formatDisplay, unitLabel } from "../../lib/units";
 
 interface Props {
   joint: Joint;
@@ -38,6 +40,14 @@ export function StandardReport({ joint, results, settings, fatigueResults, class
   const d = results.distortion;
   const p = results.process;
   const geom = joint.geometry as unknown as Record<string, unknown>;
+  const system = useProjectStore((st) => st.unitSystem);
+  // Engine values are stored in SI; render them in the active unit system.
+  const len = (v: unknown) => formatQty(Number(v), "length", system);
+  const stress = (v: number) => formatQty(v, "stress", system);
+  // Number-only length formatter for columns whose header already carries the unit.
+  const dl = (v: number) => formatDisplay(toDisplay(v, "length", system));
+  const stressU = unitLabel("stress", system);
+  const lenU = unitLabel("length", system);
 
   const hasCyclic = fatigueResults && Object.keys(fatigueResults).length > 0;
 
@@ -94,13 +104,13 @@ export function StandardReport({ joint, results, settings, fatigueResults, class
           </tr>
           <tr>
             <td style={tdStyle}>Fy</td>
-            <td style={tdStyle}>{joint.material.Fy} MPa</td>
+            <td style={tdStyle}>{stress(joint.material.Fy)}</td>
             <td style={tdStyle}>Fu</td>
-            <td style={tdStyle}>{joint.material.Fu} MPa</td>
+            <td style={tdStyle}>{stress(joint.material.Fu)}</td>
           </tr>
           <tr>
             <td style={tdStyle}>F_EXX</td>
-            <td style={tdStyle}>{joint.material.F_EXX} MPa</td>
+            <td style={tdStyle}>{stress(joint.material.F_EXX)}</td>
             <td style={tdStyle}>Code Basis</td>
             <td style={tdStyle}>{joint.service.codeBasis}</td>
           </tr>
@@ -108,24 +118,24 @@ export function StandardReport({ joint, results, settings, fatigueResults, class
             <>
               <tr>
                 <td style={tdStyle}>Web Thickness</td>
-                <td style={tdStyle}>{String(geom.webThickness)} mm</td>
+                <td style={tdStyle}>{len(geom.webThickness)}</td>
                 <td style={tdStyle}>Flange Thickness</td>
-                <td style={tdStyle}>{String(geom.flangeThickness)} mm</td>
+                <td style={tdStyle}>{len(geom.flangeThickness)}</td>
               </tr>
               <tr>
                 <td style={tdStyle}>Joint Length</td>
-                <td style={tdStyle}>{String(geom.jointLength)} mm</td>
+                <td style={tdStyle}>{len(geom.jointLength)}</td>
                 <td style={tdStyle}>Weld Size</td>
-                <td style={tdStyle}>{String(geom.weldSize)} mm</td>
+                <td style={tdStyle}>{len(geom.weldSize)}</td>
               </tr>
             </>
           )}
           {geom.plate1Thickness !== undefined && (
             <tr>
               <td style={tdStyle}>Plate 1</td>
-              <td style={tdStyle}>{String(geom.plate1Thickness)} mm</td>
+              <td style={tdStyle}>{len(geom.plate1Thickness)}</td>
               <td style={tdStyle}>Plate 2</td>
-              <td style={tdStyle}>{String(geom.plate2Thickness)} mm</td>
+              <td style={tdStyle}>{len(geom.plate2Thickness)}</td>
             </tr>
           )}
         </tbody>
@@ -145,24 +155,31 @@ export function StandardReport({ joint, results, settings, fatigueResults, class
         <tbody>
           {(
             [
-              ["Method", "method"],
-              ["Direct Shear f_v (MPa)", "f_v"],
-              ["Torsion f_t (MPa)", "f_t"],
-              ["Bending f_b (MPa)", "f_b"],
-              ["Resultant f_R (MPa)", "f_R"],
-              ["Allowable F_w (MPa)", "F_w_allow"],
-              ["Utilization (%)", "utilization_pct"],
-              ["Required Size (mm)", "w_required"],
-              ["Provided Size (mm)", "w_provided"],
-            ] as [string, keyof typeof se][]
-          ).map(([label, key]) => (
-            <tr key={key}>
-              <td style={tdStyle}>{label}</td>
-              <td style={tdStyle}>{String(se[key] ?? "—")}</td>
-              {sic && <td style={tdStyle}>{String(sic[key] ?? "—")}</td>}
-              <td style={{ ...tdStyle, fontWeight: "bold" }}>{String(s[key] ?? "—")}</td>
-            </tr>
-          ))}
+              ["Method", "method", "raw"],
+              [`Direct Shear f_v (${stressU})`, "f_v", "stress"],
+              [`Torsion f_t (${stressU})`, "f_t", "stress"],
+              [`Bending f_b (${stressU})`, "f_b", "stress"],
+              [`Resultant f_R (${stressU})`, "f_R", "stress"],
+              [`Allowable F_w (${stressU})`, "F_w_allow", "stress"],
+              ["Utilization (%)", "utilization_pct", "raw"],
+              [`Required Size (${lenU})`, "w_required", "length"],
+              [`Provided Size (${lenU})`, "w_provided", "length"],
+            ] as [string, keyof typeof se, "raw" | "stress" | "length"][]
+          ).map(([label, key, kind]) => {
+            const fmt = (val: unknown) => {
+              if (val === undefined || val === null) return "—";
+              if (kind === "raw") return String(val);
+              return formatDisplay(toDisplay(Number(val), kind, system));
+            };
+            return (
+              <tr key={key}>
+                <td style={tdStyle}>{label}</td>
+                <td style={tdStyle}>{fmt(se[key])}</td>
+                {sic && <td style={tdStyle}>{fmt(sic[key])}</td>}
+                <td style={{ ...tdStyle, fontWeight: "bold" }}>{fmt(s[key])}</td>
+              </tr>
+            );
+          })}
           <tr>
             <td style={tdStyle}>Adequate</td>
             <td style={{ ...tdStyle, color: se.adequate ? "green" : "red" }}>
@@ -202,8 +219,8 @@ export function StandardReport({ joint, results, settings, fatigueResults, class
           </tr>
           <tr>
             <td style={tdStyle}>AWS Min Fillet Size</td>
-            <td style={tdStyle}>{s.w_provided} mm</td>
-            <td style={tdStyle}>≥ {results.validation.w_min_aws} mm</td>
+            <td style={tdStyle}>{len(s.w_provided)}</td>
+            <td style={tdStyle}>≥ {len(results.validation.w_min_aws)}</td>
             <td
               style={{
                 ...tdStyle,
@@ -215,8 +232,8 @@ export function StandardReport({ joint, results, settings, fatigueResults, class
           </tr>
           <tr>
             <td style={tdStyle}>AWS Max Fillet Size</td>
-            <td style={tdStyle}>{s.w_provided} mm</td>
-            <td style={tdStyle}>≤ {results.validation.w_max_aws} mm</td>
+            <td style={tdStyle}>{len(s.w_provided)}</td>
+            <td style={tdStyle}>≤ {len(results.validation.w_max_aws)}</td>
             <td
               style={{
                 ...tdStyle,
@@ -256,8 +273,8 @@ export function StandardReport({ joint, results, settings, fatigueResults, class
               <tbody>
                 <tr><td style={tdStyle}>Category</td><td style={tdStyle}>{fat.category}</td></tr>
                 <tr><td style={tdStyle}>Description</td><td style={tdStyle}>{fat.category_description}</td></tr>
-                <tr><td style={tdStyle}>Stress Range</td><td style={tdStyle}>{fat.stress_range_MPa ?? "—"} MPa</td></tr>
-                <tr><td style={tdStyle}>Threshold</td><td style={tdStyle}>{fat.threshold_MPa} MPa</td></tr>
+                <tr><td style={tdStyle}>Stress Range</td><td style={tdStyle}>{fat.stress_range_MPa != null ? stress(fat.stress_range_MPa) : "—"}</td></tr>
+                <tr><td style={tdStyle}>Threshold</td><td style={tdStyle}>{stress(fat.threshold_MPa)}</td></tr>
                 <tr><td style={tdStyle}>Below Threshold</td><td style={{ ...tdStyle, color: fat.below_threshold ? "green" : "#000" }}>{fat.below_threshold ? "Yes — infinite life" : "No"}</td></tr>
                 {fat.cycles_to_failure !== null && (
                   <tr><td style={tdStyle}>Cycles to Failure</td><td style={tdStyle}>{fat.cycles_to_failure?.toExponential(3)}</td></tr>
@@ -365,16 +382,16 @@ export function StandardReport({ joint, results, settings, fatigueResults, class
                 <td style={tdStyle}>{d.angular_deg.max}</td>
               </tr>
               <tr>
-                <td style={tdStyle}>Transverse Shrinkage (mm)</td>
-                <td style={tdStyle}>{d.transverse_shrinkage_mm.min}</td>
-                <td style={tdStyle}>{d.transverse_shrinkage_mm.expected}</td>
-                <td style={tdStyle}>{d.transverse_shrinkage_mm.max}</td>
+                <td style={tdStyle}>Transverse Shrinkage ({lenU})</td>
+                <td style={tdStyle}>{dl(d.transverse_shrinkage_mm.min)}</td>
+                <td style={tdStyle}>{dl(d.transverse_shrinkage_mm.expected)}</td>
+                <td style={tdStyle}>{dl(d.transverse_shrinkage_mm.max)}</td>
               </tr>
               <tr>
-                <td style={tdStyle}>Longitudinal Shrinkage (mm)</td>
-                <td style={tdStyle}>{d.longitudinal_shrinkage_mm.min}</td>
-                <td style={tdStyle}>{d.longitudinal_shrinkage_mm.expected}</td>
-                <td style={tdStyle}>{d.longitudinal_shrinkage_mm.max}</td>
+                <td style={tdStyle}>Longitudinal Shrinkage ({lenU})</td>
+                <td style={tdStyle}>{dl(d.longitudinal_shrinkage_mm.min)}</td>
+                <td style={tdStyle}>{dl(d.longitudinal_shrinkage_mm.expected)}</td>
+                <td style={tdStyle}>{dl(d.longitudinal_shrinkage_mm.max)}</td>
               </tr>
             </tbody>
           </table>

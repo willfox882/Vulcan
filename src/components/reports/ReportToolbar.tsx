@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Joint, AnalysisResult } from "../../types";
 import { useUIStore } from "../../stores/uiStore";
+import { useProjectStore } from "../../stores/projectStore";
 import { generateCalculationSheet } from "./CalculationSheet";
 import { ReportSettings } from "./ReportSettings";
 
@@ -23,9 +24,10 @@ export function ReportToolbar({ joint, results }: Props) {
 
   async function handleCalcSheet() {
     const settings = useUIStore.getState().reportSettings;
+    const system = useProjectStore.getState().unitSystem;
     setCalcLoading(true);
     try {
-      await generateCalculationSheet(joint, results, settings);
+      await generateCalculationSheet(joint, results, settings, system);
     } finally {
       setCalcLoading(false);
     }

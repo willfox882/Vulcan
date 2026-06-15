@@ -57,6 +57,20 @@ export function formatDisplay(n: number): string {
   return String(parseFloat(n.toPrecision(6)));
 }
 
+/** Unit label (e.g. "mm" / "in") for a dimension in the active system. */
+export function unitLabel(dim: Dimension, system: UnitSystem): string {
+  return UNIT_LABELS[system][dim];
+}
+
+/**
+ * Format an SI-stored quantity for report display as "<value> <unit>" in the
+ * active unit system (e.g. 483 stress, imperial → "70.0537 ksi"). Used by the
+ * report components so every printed/exported value matches the on-screen units.
+ */
+export function formatQty(siValue: number, dim: Dimension, system: UnitSystem): string {
+  return `${formatDisplay(toDisplay(siValue, dim, system))} ${UNIT_LABELS[system][dim]}`;
+}
+
 export function mmToIn(mm: number): number {
   return mm / 25.4;
 }

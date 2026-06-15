@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toDisplay, fromDisplay, formatDisplay } from "./units";
+import { toDisplay, fromDisplay, formatDisplay, unitLabel, formatQty } from "./units";
 
 describe("unit conversion (toDisplay / fromDisplay)", () => {
   it("length: 12 mm -> 0.4724 in and back", () => {
@@ -50,5 +50,29 @@ describe("formatDisplay", () => {
   it("non-finite falls back to 0", () => {
     expect(formatDisplay(Infinity)).toBe("0");
     expect(formatDisplay(NaN)).toBe("0");
+  });
+});
+
+describe("report helpers (unitLabel / formatQty)", () => {
+  it("unitLabel returns the active-system label", () => {
+    expect(unitLabel("length", "metric")).toBe("mm");
+    expect(unitLabel("length", "imperial")).toBe("in");
+    expect(unitLabel("stress", "metric")).toBe("MPa");
+    expect(unitLabel("stress", "imperial")).toBe("ksi");
+    expect(unitLabel("angle", "imperial")).toBe("°");
+  });
+
+  it("formatQty leaves metric values untouched with SI label", () => {
+    expect(formatQty(483, "stress", "metric")).toBe("483 MPa");
+    expect(formatQty(8, "length", "metric")).toBe("8 mm");
+  });
+
+  it("formatQty converts and labels imperial values", () => {
+    expect(formatQty(483, "stress", "imperial")).toBe("70.0532 ksi");
+    expect(formatQty(25.4, "length", "imperial")).toBe("1 in");
+  });
+
+  it("formatQty does not convert angle across systems", () => {
+    expect(formatQty(45, "angle", "imperial")).toBe("45 °");
   });
 });

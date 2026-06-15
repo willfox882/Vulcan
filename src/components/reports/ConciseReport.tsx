@@ -1,5 +1,7 @@
 import type { Joint, AnalysisResult } from "../../types";
 import type { ReportSettings } from "../../stores/uiStore";
+import { useProjectStore } from "../../stores/projectStore";
+import { formatQty } from "../../lib/units";
 
 interface Props {
   joint: Joint;
@@ -23,6 +25,10 @@ const thStyle: React.CSSProperties = {
 export function ConciseReport({ joint, results, settings, className }: Props) {
   const s = results.structural_governing;
   const geom = joint.geometry as unknown as Record<string, unknown>;
+  const system = useProjectStore((st) => st.unitSystem);
+  // All engine values are stored in SI; render them in the active unit system.
+  const len = (v: unknown) => formatQty(Number(v), "length", system);
+  const stress = (v: number) => formatQty(v, "stress", system);
 
   return (
     <div
@@ -82,32 +88,32 @@ export function ConciseReport({ joint, results, settings, className }: Props) {
           </tr>
           <tr>
             <td style={tdStyle}>Fy</td>
-            <td style={tdStyle}>{joint.material.Fy} MPa</td>
+            <td style={tdStyle}>{stress(joint.material.Fy)}</td>
             <td style={tdStyle}>Fu</td>
-            <td style={tdStyle}>{joint.material.Fu} MPa</td>
+            <td style={tdStyle}>{stress(joint.material.Fu)}</td>
           </tr>
           {geom.webThickness !== undefined && (
             <tr>
               <td style={tdStyle}>Web Thickness</td>
-              <td style={tdStyle}>{String(geom.webThickness)} mm</td>
+              <td style={tdStyle}>{len(geom.webThickness)}</td>
               <td style={tdStyle}>Flange Thickness</td>
-              <td style={tdStyle}>{String(geom.flangeThickness)} mm</td>
+              <td style={tdStyle}>{len(geom.flangeThickness)}</td>
             </tr>
           )}
           {geom.plate1Thickness !== undefined && (
             <tr>
               <td style={tdStyle}>Plate 1 Thickness</td>
-              <td style={tdStyle}>{String(geom.plate1Thickness)} mm</td>
+              <td style={tdStyle}>{len(geom.plate1Thickness)}</td>
               <td style={tdStyle}>Plate 2 Thickness</td>
-              <td style={tdStyle}>{String(geom.plate2Thickness)} mm</td>
+              <td style={tdStyle}>{len(geom.plate2Thickness)}</td>
             </tr>
           )}
           {geom.jointLength !== undefined && (
             <tr>
               <td style={tdStyle}>Joint Length</td>
-              <td style={tdStyle}>{String(geom.jointLength)} mm</td>
+              <td style={tdStyle}>{len(geom.jointLength)}</td>
               <td style={tdStyle}>Weld Size</td>
-              <td style={tdStyle}>{String(geom.weldSize ?? "—")} mm</td>
+              <td style={tdStyle}>{geom.weldSize !== undefined ? len(geom.weldSize) : "—"}</td>
             </tr>
           )}
         </tbody>
@@ -127,7 +133,7 @@ export function ConciseReport({ joint, results, settings, className }: Props) {
             <td style={tdStyle}>Weld Type</td>
             <td style={tdStyle}>{s.method}</td>
             <td style={tdStyle}>Required Size</td>
-            <td style={tdStyle}>{s.w_required} mm</td>
+            <td style={tdStyle}>{len(s.w_required)}</td>
           </tr>
           <tr>
             <td style={tdStyle}>Process</td>
@@ -167,8 +173,8 @@ export function ConciseReport({ joint, results, settings, className }: Props) {
           </tr>
           <tr>
             <td style={tdStyle}>AWS Min Size</td>
-            <td style={tdStyle}>{s.w_provided} mm</td>
-            <td style={tdStyle}>≥ {results.validation.w_min_aws} mm</td>
+            <td style={tdStyle}>{len(s.w_provided)}</td>
+            <td style={tdStyle}>≥ {len(results.validation.w_min_aws)}</td>
             <td
               style={{
                 ...tdStyle,

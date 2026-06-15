@@ -1,10 +1,13 @@
 import type { Joint, AnalysisResult } from "../../types";
 import type { ReportSettings } from "../../stores/uiStore";
+import type { UnitSystem } from "../../lib/units";
+import { toDisplay, formatDisplay, unitLabel } from "../../lib/units";
 
 export async function generateCalculationSheet(
   joint: Joint,
   results: AnalysisResult,
-  settings: ReportSettings
+  settings: ReportSettings,
+  system: UnitSystem = "metric"
 ): Promise<void> {
   // jsPDF + html2canvas are ~600 kB raw; load them only when a user actually
   // exports a calculation sheet so they stay out of the initial bundle.
@@ -44,11 +47,23 @@ export async function generateCalculationSheet(
   }
 
   const geom = joint.geometry as unknown as Record<string, unknown>;
+  // All geometry/engine values are stored in SI; the sheet is rendered in the
+  // active unit system. dl/ds convert+format; section properties (length³) are
+  // recomputed from the converted dimensions so each derivation line is
+  // self-consistent in the displayed units.
+  const lenU = unitLabel("length", system);
+  const stressU = unitLabel("stress", system);
+  const dl = (v: number) => formatDisplay(toDisplay(v, "length", system));
+  const ds = (v: number) => formatDisplay(toDisplay(v, "stress", system));
   const t1 = (geom.webThickness ?? geom.plate1Thickness ?? 12) as number;
   const t2 = (geom.flangeThickness ?? geom.plate2Thickness ?? 16) as number;
   const L = (geom.jointLength ?? 200) as number;
   const w = (geom.weldSize ?? 8) as number;
   const s = results.structural_governing;
+  // Converted dimensions for the derivation substitutions.
+  const t1d = toDisplay(t1, "length", system);
+  const Ld = toDisplay(L, "length", system);
+  const wd = toDisplay(w, "length", system);
 
   // Page 1: Header + Joint Configuration
   await renderAndAddPage(`
@@ -74,61 +89,64 @@ export async function generateCalculationSheet(
       </tr>
       <tr>
         <td style="border:1px solid #ccc;padding:3px 6px;">Thickness (t&#x2081;)</td>
-        <td style="border:1px solid #ccc;padding:3px 6px;">${t1} mm</td>
+        <td style="border:1px solid #ccc;padding:3px 6px;">${dl(t1)} ${lenU}</td>
         <td style="border:1px solid #ccc;padding:3px 6px;">Thickness (t&#x2082;)</td>
-        <td style="border:1px solid #ccc;padding:3px 6px;">${t2} mm</td>
+        <td style="border:1px solid #ccc;padding:3px 6px;">${dl(t2)} ${lenU}</td>
       </tr>
       <tr>
         <td style="border:1px solid #ccc;padding:3px 6px;">Joint Length</td>
-        <td style="border:1px solid #ccc;padding:3px 6px;">${L} mm</td>
+        <td style="border:1px solid #ccc;padding:3px 6px;">${dl(L)} ${lenU}</td>
         <td style="border:1px solid #ccc;padding:3px 6px;">Weld Size</td>
-        <td style="border:1px solid #ccc;padding:3px 6px;">${w} mm</td>
+        <td style="border:1px solid #ccc;padding:3px 6px;">${dl(w)} ${lenU}</td>
       </tr>
       <tr>
         <td style="border:1px solid #ccc;padding:3px 6px;">Fy</td>
-        <td style="border:1px solid #ccc;padding:3px 6px;">${joint.material.Fy} MPa</td>
+        <td style="border:1px solid #ccc;padding:3px 6px;">${ds(joint.material.Fy)} ${stressU}</td>
         <td style="border:1px solid #ccc;padding:3px 6px;">F_EXX</td>
-        <td style="border:1px solid #ccc;padding:3px 6px;">${joint.material.F_EXX} MPa</td>
+        <td style="border:1px solid #ccc;padding:3px 6px;">${ds(joint.material.F_EXX)} ${stressU}</td>
       </tr>
     </table>
   `);
 
-  // Page 2: Structural calculation walkthrough
+  // Page 2: Structural calculation walkthrough. Section properties (length³)
+  // are recomputed from the converted dimensions so the substituted numbers and
+  // the result share the displayed unit system.
   const L_total = s.L_total ?? 2 * L;
-  const I_ux = s.I_ux ?? 0;
-  const J_u = s.J_u ?? 0;
-  const a = (0.707 * w).toFixed(2);
+  const a = formatDisplay(0.707 * wd);
+  const I_ux_d = 2 * Ld * (t1d / 2) ** 2;
+  const I_uy_d = (2 * Ld ** 3) / 12;
+  const J_u_d = I_ux_d + I_uy_d;
 
   await renderAndAddPage(`
     <div style="font-weight:bold;margin-bottom:8px;">STRUCTURAL ANALYSIS — ${s.method}</div>
     <div style="font-family:monospace;font-size:9pt;line-height:1.8;">
       <b>Weld Group Properties (Treating Weld as Line)</b><br>
-      Total weld length:  L_total = 2L = ${L_total} mm<br>
-      Effective throat:   a = 0.707 &times; ${w} = ${a} mm<br><br>
+      Total weld length:  L_total = 2L = ${dl(L_total)} ${lenU}<br>
+      Effective throat:   a = 0.707 &times; ${dl(w)} = ${a} ${lenU}<br><br>
 
       <b>Linear Unit Moments of Inertia</b><br>
-      I_ux = 2 &middot; L &middot; (t&#x2081;/2)&sup2; = 2(${L})(${t1 / 2})&sup2; = ${I_ux.toFixed(0)} mm&sup3;<br>
-      I_uy = 2 &middot; L&sup3;/12 = 2(${L})&sup3;/12 = ${((2 * L * L * L) / 12).toFixed(0)} mm&sup3;<br>
-      J_u  = I_ux + I_uy = ${J_u.toFixed(0)} mm&sup3;<br><br>
+      I_ux = 2 &middot; L &middot; (t&#x2081;/2)&sup2; = 2(${dl(L)})(${formatDisplay(t1d / 2)})&sup2; = ${formatDisplay(I_ux_d)} ${lenU}&sup3;<br>
+      I_uy = 2 &middot; L&sup3;/12 = 2(${dl(L)})&sup3;/12 = ${formatDisplay(I_uy_d)} ${lenU}&sup3;<br>
+      J_u  = I_ux + I_uy = ${formatDisplay(J_u_d)} ${lenU}&sup3;<br><br>
 
       <b>Stress Components</b><br>
-      Direct shear:   f_v = ${s.f_v} MPa<br>
-      Torsion:        f_t = ${s.f_t} MPa<br>
-      Bending:        f_b = ${s.f_b} MPa<br>
-      Resultant:      f_R = &radic;(f_v&sup2; + f_t&sup2; + f_b&sup2;) &asymp; ${s.f_R} MPa<br><br>
+      Direct shear:   f_v = ${ds(s.f_v)} ${stressU}<br>
+      Torsion:        f_t = ${ds(s.f_t)} ${stressU}<br>
+      Bending:        f_b = ${ds(s.f_b)} ${stressU}<br>
+      Resultant:      f_R = &radic;(f_v&sup2; + f_t&sup2; + f_b&sup2;) &asymp; ${ds(s.f_R)} ${stressU}<br><br>
 
       <b>Allowable Stress (${joint.service.codeBasis})</b><br>
       F_w = ${joint.service.codeBasis === "ASD" ? "0.30" : "0.45"} &times; F_EXX
-          = ${joint.service.codeBasis === "ASD" ? "0.30" : "0.45"} &times; ${joint.material.F_EXX}
-          = ${s.F_w_allow} MPa<br><br>
+          = ${joint.service.codeBasis === "ASD" ? "0.30" : "0.45"} &times; ${ds(joint.material.F_EXX)}
+          = ${ds(s.F_w_allow)} ${stressU}<br><br>
 
       <b>Utilization</b><br>
-      U = f_R / F_w = ${s.f_R} / ${s.F_w_allow} = ${s.utilization_pct}%
+      U = f_R / F_w = ${ds(s.f_R)} / ${ds(s.F_w_allow)} = ${s.utilization_pct}%
           ${s.utilization_pct <= 100 ? "&#10003; PASS" : "&#10007; FAIL"}<br><br>
 
       <b>Required Leg Size</b><br>
-      w_req  = ${s.w_required} mm<br>
-      w_prov = ${s.w_provided} mm
+      w_req  = ${dl(s.w_required)} ${lenU}<br>
+      w_prov = ${dl(s.w_provided)} ${lenU}
                ${s.w_provided >= s.w_required ? "&#10003; ADEQUATE" : "&#10007; INADEQUATE"}<br>
     </div>
   `);
