@@ -80,6 +80,25 @@ export function NumericField({
   const displayMin = min !== undefined ? toDisplay(min, dimension, unitSystem) : undefined;
   const displayStep = step ?? defaultStep(dimension, metric);
 
+  // Bounds: an explicit SI `min` gives a ">= min" rule; otherwise length and
+  // stress must be > 0 and angle >= 0. Force/moment are unrestricted (a load
+  // can be zero or negative). Validation is against the stored SI value so an
+  // empty field mid-edit isn't flagged.
+  let invalid = false;
+  let invalidMsg = "";
+  if (Number.isFinite(value)) {
+    if (min !== undefined) {
+      invalid = value < min;
+      invalidMsg = `Must be ≥ ${formatDisplay(toDisplay(min, dimension, unitSystem))} ${unitLabel}`;
+    } else if (dimension === "length" || dimension === "stress") {
+      invalid = value <= 0;
+      invalidMsg = "Must be greater than 0";
+    } else if (dimension === "angle") {
+      invalid = value < 0;
+      invalidMsg = "Must be ≥ 0";
+    }
+  }
+
   return (
     <div className="flex flex-col gap-1">
       <label className="text-text-tertiary text-xs">{label}</label>
@@ -89,11 +108,17 @@ export function NumericField({
           value={text}
           min={displayMin}
           step={displayStep}
+          aria-invalid={invalid}
           onChange={(e) => handleChange(e.target.value)}
-          className="flex-1 bg-bg-elevated border border-border-subtle rounded px-2 py-1.5 text-sm text-text-primary font-mono focus:outline-none focus:border-accent/60 transition-colors"
+          className={`flex-1 bg-bg-elevated border rounded px-2 py-1.5 text-sm text-text-primary font-mono focus:outline-none transition-colors ${
+            invalid
+              ? "border-semantic-fail focus:border-semantic-fail"
+              : "border-border-subtle focus:border-accent/60"
+          }`}
         />
         <span className="text-text-tertiary text-xs w-8">{unitLabel}</span>
       </div>
+      {invalid && <span className="text-semantic-fail text-[10px]">{invalidMsg}</span>}
     </div>
   );
 }

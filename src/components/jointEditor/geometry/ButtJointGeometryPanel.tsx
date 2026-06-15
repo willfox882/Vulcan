@@ -40,8 +40,8 @@ export function ButtJointGeometryPanel() {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <NumericField label="Groove Angle (α)" value={g.grooveAngle} onChange={(v) => update("grooveAngle", v)} dimension="angle" />
-        <NumericField label="Root Opening (r)" value={g.rootOpening} onChange={(v) => update("rootOpening", v)} />
-        <NumericField label="Root Face (f)" value={g.rootFace} onChange={(v) => update("rootFace", v)} />
+        <NumericField label="Root Opening (r)" value={g.rootOpening} onChange={(v) => update("rootOpening", v)} min={0} />
+        <NumericField label="Root Face (f)" value={g.rootFace} onChange={(v) => update("rootFace", v)} min={0} />
       </div>
       <div>
         <label className="text-text-tertiary text-xs block mb-1">Penetration</label>

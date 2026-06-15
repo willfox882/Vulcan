@@ -3,6 +3,7 @@ import { useProjectStore } from "../../stores/projectStore";
 import { useResultsStore } from "../../stores/resultsStore";
 import { usePyodideStore } from "../../stores/pyodideStore";
 import { callEngine } from "../../lib/pyodide";
+import { firstInvalidDimension } from "../../lib/geometry";
 import type {
   AnalysisResult,
   FatigueResult,
@@ -78,6 +79,14 @@ export function ResultsPanel() {
 
     debounceRef.current = setTimeout(async () => {
       if (signal.aborted) return;
+      // Keep non-physical geometry out of the solver — it would otherwise
+      // return zero demand and a misleading "ADEQUATE".
+      const invalidDim = firstInvalidDimension(activeJoint);
+      if (invalidDim) {
+        setLoading(activeJoint.id, false);
+        setError(activeJoint.id, `${invalidDim} must be a positive value before analysis can run.`);
+        return;
+      }
       setLoading(activeJoint.id, true);
       setError(activeJoint.id, null);
       try {
