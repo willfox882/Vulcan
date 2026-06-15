@@ -1,5 +1,3 @@
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
 import type { Joint, AnalysisResult } from "../../types";
 import type { ReportSettings } from "../../stores/uiStore";
 
@@ -8,6 +6,13 @@ export async function generateCalculationSheet(
   results: AnalysisResult,
   settings: ReportSettings
 ): Promise<void> {
+  // jsPDF + html2canvas are ~600 kB raw; load them only when a user actually
+  // exports a calculation sheet so they stay out of the initial bundle.
+  const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+    import("jspdf"),
+    import("html2canvas"),
+  ]);
+
   // Find or create the render target div
   let el = document.getElementById("calc-sheet-render");
   if (!el) {
