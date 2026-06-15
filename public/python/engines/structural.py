@@ -525,9 +525,11 @@ def _ic_capacity(elements, elem_len, w, F_EXX, Fy, Mz, N_samples=51):
     The weld group lies in the x–y plane and is symmetric about the
     x-axis (y_ic = 0 by symmetry; only x_ic is solved). All element
     forces act perpendicular to r_i = (ex - x_ic, ey), in the CCW sense
-    about IC. The critical element (largest r) is taken to be at the
-    rupture deformation delta_ult; deformation at other elements scales
-    linearly with r.
+    about IC. Deformation follows rigid-body rotation about IC
+    (delta_i = omega * r_i); the first element to rupture is the one
+    maximizing r_i / delta_ult,i, and the per-element strength uses the
+    full Lesik-Kennedy curve — directional factor (1 + 0.5 sin^1.5 theta)
+    and the angle-dependent ultimate deformation delta_ult,i(theta).
 
     Convergence criterion (consistency of force and moment equilibrium):
 
@@ -551,14 +553,32 @@ def _ic_capacity(elements, elem_len, w, F_EXX, Fy, Mz, N_samples=51):
         r_max = rs.max()
         if r_max < 1e-9:
             return 0.0, 0.0
-        rhos = rs / r_max
-        # R_ult per unit length (Lesik-Kennedy at rho=1)
+        # Loading angle of each element force relative to the weld axis. The
+        # IC weld lines run in the y-direction and the element force is
+        # perpendicular to r_i, so sin(theta) = |r_y| / r  (theta = 0 -> force
+        # parallel to weld = longitudinal; theta = 90 deg -> transverse).
+        with np.errstate(divide="ignore", invalid="ignore"):
+            sin_theta = np.where(rs > 1e-9, np.abs(rys) / rs, 0.0)
+        sin_theta = np.clip(sin_theta, 0.0, 1.0)
+        theta = np.arcsin(sin_theta)
+        # Angle-dependent ultimate deformation (AISC J2 commentary).
+        du = 1.087 * (np.degrees(theta) + 6.0) ** (-0.65) * w
+        du = np.minimum(du, 0.17 * w)
+        # Rigid-body compatibility about IC: delta_i = omega * r_i. The first
+        # element to rupture maximizes r_i / du_i; scale so its rho = 1. (du is
+        # proportional to w and cancels here, so rho — and hence P_n/w — is
+        # independent of the weld size.)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ratio = np.where(du > 1e-12, rs / du, 0.0)
+        ratio_max = ratio.max()
+        rhos = ratio / ratio_max if ratio_max > 0 else np.zeros_like(ratio)
+        # Lesik-Kennedy element strength: R_ult * directional * deformation.
         R_ult_per_mm = 0.60 * F_EXX * 0.707 * w
-        # Deformation factor (1.9·rho - 0.9·rho²)^0.3  (since (rho*(1.9 - 0.9*rho))^0.3)
+        angle_fac = 1.0 + 0.5 * sin_theta ** 1.5
         with np.errstate(invalid="ignore"):
             def_fac = np.where(rhos > 0,
                                (rhos * (1.9 - 0.9 * rhos))**0.3, 0.0)
-        Fi = R_ult_per_mm * elem_len * def_fac  # element force magnitudes
+        Fi = R_ult_per_mm * elem_len * angle_fac * def_fac  # force magnitudes
         # CCW unit perp to r = (-ry/r, rx/r); we take the y-component
         with np.errstate(divide="ignore", invalid="ignore"):
             Fy_arr = np.where(rs > 1e-9, Fi * rxs / rs, 0.0)

@@ -298,6 +298,37 @@ def test_ic_method_default_joint_not_bogus():
     assert 2.0 < ratio < 3.0, f"IC util ratio (w=8 vs w=20) = {ratio:.2f}, expected ≈2.5"
 
 
+def test_m2_ic_full_lesik_kennedy_curve():
+    """M2: IC capacity uses the full Lesik-Kennedy element strength
+    (directional factor + angle-dependent delta_ult), stays exactly linear in
+    weld size, and is physically bounded by the concentric (pure-shear) limit.
+    The characterization value also locks the directional-factor contribution
+    so its accidental removal is caught."""
+    base = {"type": "t_joint", "webThickness": 12, "flangeThickness": 16,
+            "jointLength": 400}
+    mat = {"F_EXX": 483}
+    svc = {"codeBasis": "ASD"}
+    ecc = {"Fx": 0, "Fy": -10000, "Fz": 0, "Mx": 0, "My": 0, "Mz": 500000}
+
+    ic8 = structural._ic_method_t_joint({**base, "weldSize": 8}, mat, ecc, svc)
+    ic16 = structural._ic_method_t_joint({**base, "weldSize": 16}, mat, ecc, svc)
+
+    # P_n must scale exactly linearly with weld size.
+    assert _approx(ic16["P_capacity_N"] / ic8["P_capacity_N"], 2.0, 0.005), \
+        f"P_n not linear in w: {ic8['P_capacity_N']} vs {ic16['P_capacity_N']}"
+
+    # Eccentric capacity must be below the concentric (pure-shear) limit.
+    ps8 = structural._ic_method_t_joint(
+        {**base, "weldSize": 8}, mat,
+        {"Fx": 0, "Fy": -10000, "Fz": 0, "Mx": 0, "My": 0, "Mz": 0}, svc)
+    assert 0 < ic8["P_capacity_N"] < ps8["P_capacity_N"], \
+        (ic8["P_capacity_N"], ps8["P_capacity_N"])
+
+    # Characterization: locks the current full-curve capacity (~1.264e6 N).
+    # Removing the (1 + 0.5 sin^1.5 theta) directional factor changes this.
+    assert _approx(ic8["P_capacity_N"], 1.2636e6, 0.01), ic8["P_capacity_N"]
+
+
 def test_b11_cooling_time_3d_regime():
     """Test 11: t8/5 in 3D regime with Q=1.5 kJ/mm, T0=100°C → ≈6.4 s.
 
