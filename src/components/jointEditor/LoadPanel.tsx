@@ -40,30 +40,68 @@ function StaticFields({ lc, onChange }: { lc: StaticLoadCase; onChange: (updated
   );
 }
 
+function LoadDirectionToggle({
+  value,
+  onChange,
+}: {
+  value?: "transverse" | "parallel";
+  onChange: (d: "transverse" | "parallel") => void;
+}) {
+  const current = value ?? "transverse";
+  return (
+    <div>
+      <label className="text-text-tertiary text-xs block mb-1">
+        Load direction (fatigue category)
+      </label>
+      <div className="flex gap-2">
+        {(["transverse", "parallel"] as const).map((d) => (
+          <button
+            key={d}
+            onClick={() => onChange(d)}
+            className={`px-3 py-1.5 text-xs rounded border transition-colors capitalize ${
+              current === d
+                ? "border-accent text-accent bg-accent/10"
+                : "border-border-subtle text-text-secondary hover:border-border-strong"
+            }`}
+          >
+            {d}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function CyclicFields({ lc, onChange }: { lc: CyclicLoadCase; onChange: (updated: CyclicLoadCase) => void }) {
   return (
-    <div className="grid grid-cols-2 gap-3 mt-2">
-      {([
-        { key: "stressRangeMPa", label: "Stress Range", unit: "MPa", step: "1" },
-        { key: "frequencyHz",    label: "Frequency",    unit: "Hz",  step: "0.1" },
-        { key: "hoursPerDay",    label: "Hours / Day",  unit: "hr",  step: "1" },
-        { key: "daysPerYear",    label: "Days / Year",  unit: "day", step: "1" },
-      ] as const).map(({ key, label, unit, step }) => (
-        <div key={key} className="flex flex-col gap-1">
-          <label className="text-text-tertiary text-xs">{label}</label>
-          <div className="flex items-center gap-1.5">
-            <input
-              type="number"
-              value={lc[key]}
-              step={step}
-              min={0}
-              onChange={(e) => onChange({ ...lc, [key]: parseFloat(e.target.value) || 0 })}
-              className="flex-1 bg-bg-elevated border border-border-subtle rounded px-2 py-1.5 text-sm text-text-primary font-mono focus:outline-none focus:border-accent/60 transition-colors"
-            />
-            <span className="text-text-tertiary text-xs w-8">{unit}</span>
+    <div className="flex flex-col gap-3 mt-2">
+      <div className="grid grid-cols-2 gap-3">
+        {([
+          { key: "stressRangeMPa", label: "Stress Range", unit: "MPa", step: "1" },
+          { key: "frequencyHz",    label: "Frequency",    unit: "Hz",  step: "0.1" },
+          { key: "hoursPerDay",    label: "Hours / Day",  unit: "hr",  step: "1" },
+          { key: "daysPerYear",    label: "Days / Year",  unit: "day", step: "1" },
+        ] as const).map(({ key, label, unit, step }) => (
+          <div key={key} className="flex flex-col gap-1">
+            <label className="text-text-tertiary text-xs">{label}</label>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number"
+                value={lc[key]}
+                step={step}
+                min={0}
+                onChange={(e) => onChange({ ...lc, [key]: parseFloat(e.target.value) || 0 })}
+                className="flex-1 bg-bg-elevated border border-border-subtle rounded px-2 py-1.5 text-sm text-text-primary font-mono focus:outline-none focus:border-accent/60 transition-colors"
+              />
+              <span className="text-text-tertiary text-xs w-8">{unit}</span>
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
+      <LoadDirectionToggle
+        value={lc.loadDirection}
+        onChange={(d) => onChange({ ...lc, loadDirection: d })}
+      />
     </div>
   );
 }
@@ -148,6 +186,10 @@ function SpectrumFields({ lc, onChange }: { lc: SpectrumLoadCase; onChange: (upd
           ))}
         </div>
       </div>
+      <LoadDirectionToggle
+        value={lc.loadDirection}
+        onChange={(d) => onChange({ ...lc, loadDirection: d })}
+      />
     </div>
   );
 }

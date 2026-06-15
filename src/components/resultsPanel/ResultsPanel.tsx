@@ -128,9 +128,11 @@ export function ResultsPanel() {
                   design_life_years: activeJoint.service.designLife,
                 };
 
+          const loadDirection =
+            (lc as CyclicLoadCase | SpectrumLoadCase).loadDirection ?? "transverse";
           const fatRes = await callEngine<FatigueResult>(pyodide, "analyze_fatigue", {
             joint: { ...activeJoint.geometry, type: activeJoint.type },
-            structural: { load_direction: "transverse" },
+            structural: { load_direction: loadDirection },
             fatigue: fatigueInput,
           }, signal);
           if (signal.aborted) return;

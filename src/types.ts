@@ -80,6 +80,8 @@ export interface CyclicLoadCase {
   frequencyHz: number;
   hoursPerDay: number;
   daysPerYear: number;
+  /** Orientation of stress relative to the weld axis (drives fatigue category). */
+  loadDirection?: "transverse" | "parallel";
 }
 
 export interface SpectrumEntry {
@@ -95,6 +97,8 @@ export interface SpectrumLoadCase {
   frequencyHz: number;
   hoursPerDay: number;
   daysPerYear: number;
+  /** Orientation of stress relative to the weld axis (drives fatigue category). */
+  loadDirection?: "transverse" | "parallel";
 }
 
 export type LoadCaseItem = StaticLoadCase | CyclicLoadCase | SpectrumLoadCase;

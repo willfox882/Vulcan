@@ -70,10 +70,10 @@ def analyze_joint(input_data: dict) -> dict:
 
 def _elastic_twl_t_joint(joint, material, loads, service):
     """Elastic TWL method — T-joint, both sides fillet."""
-    t1 = joint["webThickness"]
-    t2 = joint["flangeThickness"]
-    L = joint["jointLength"]
-    w = joint["weldSize"]
+    t1 = joint.get("webThickness", 12)
+    t2 = joint.get("flangeThickness", 16)
+    L = joint.get("jointLength", 200)
+    w = joint.get("weldSize", 8)
     F_EXX = material.get("F_EXX", 483)
 
     L_total = 2.0 * L
@@ -160,9 +160,9 @@ def _ic_method_t_joint(joint, material, loads, service):
     conservative) utilization of the two, so those components are never
     silently dropped from the governing check.
     """
-    t1 = joint["webThickness"]
-    L = joint["jointLength"]
-    w = joint["weldSize"]
+    t1 = joint.get("webThickness", 12)
+    L = joint.get("jointLength", 200)
+    w = joint.get("weldSize", 8)
     F_EXX = material.get("F_EXX", 483)
 
     Fy = loads.get("Fy", 0.0)

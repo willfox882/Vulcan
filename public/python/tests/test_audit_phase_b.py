@@ -329,6 +329,32 @@ def test_m2_ic_full_lesik_kennedy_curve():
     assert _approx(ic8["P_capacity_N"], 1.2636e6, 0.01), ic8["P_capacity_N"]
 
 
+def test_m4_fatigue_load_direction_changes_category():
+    """M4: fatigue category must respond to the load direction (previously
+    hardcoded "transverse" so parallel cases were never reachable)."""
+    def cat(joint, direction):
+        return fatigue.analyze_fatigue({
+            "joint": joint,
+            "structural": {"load_direction": direction},
+            "fatigue": {"type": "constant_amplitude", "stress_range_MPa": 100.0},
+        })["category"]
+    assert cat({"type": "lap_joint"}, "transverse") == "F"
+    assert cat({"type": "lap_joint"}, "parallel") == "E"
+    assert cat({"type": "butt_joint", "penetration": "full"}, "parallel") == "B"
+    assert cat({"type": "butt_joint", "penetration": "full"}, "transverse") == "C"
+
+
+def test_m5_tjoint_robust_to_missing_geometry_fields():
+    """M5: T-joint engine must not KeyError on a sparse joint dict; it falls
+    back to defaults like the other joint types do."""
+    elastic = structural._elastic_twl_t_joint(
+        {"type": "t_joint"}, {"F_EXX": 483}, {"Fy": -10000}, {"codeBasis": "ASD"})
+    assert math.isfinite(elastic["f_R"]) and elastic["f_R"] >= 0
+    ic = structural._ic_method_t_joint(
+        {"type": "t_joint"}, {"F_EXX": 483}, {"Fy": -10000, "Mz": 0}, {"codeBasis": "ASD"})
+    assert math.isfinite(ic["utilization"])
+
+
 def test_b11_cooling_time_3d_regime():
     """Test 11: t8/5 in 3D regime with Q=1.5 kJ/mm, T0=100°C → ≈6.4 s.
 
