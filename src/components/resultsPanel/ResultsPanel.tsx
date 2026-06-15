@@ -4,6 +4,7 @@ import { useResultsStore } from "../../stores/resultsStore";
 import { usePyodideStore } from "../../stores/pyodideStore";
 import { callEngine } from "../../lib/pyodide";
 import { firstInvalidDimension } from "../../lib/geometry";
+import { governingIndex } from "../../lib/envelope";
 import type {
   AnalysisResult,
   FatigueResult,
@@ -13,8 +14,10 @@ import type {
   StaticLoadCase,
   CyclicLoadCase,
   SpectrumLoadCase,
+  LoadCaseUtilization,
 } from "../../types";
 import { StructuralResults } from "./StructuralResults";
+import { LoadCaseEnvelope } from "./LoadCaseEnvelope";
 import { WeldSymbolPreview } from "./WeldSymbolPreview";
 import { WarningsList } from "./WarningsList";
 import { FatigueResults } from "./FatigueResults";
@@ -45,6 +48,7 @@ export function ResultsPanel() {
   const { reportSettings } = useUIStore();
   const {
     results,
+    loadCaseEnvelopes,
     fatigueResults,
     processResults,
     metallurgyResults,
@@ -52,6 +56,7 @@ export function ResultsPanel() {
     loading,
     errors,
     setResult,
+    setLoadCaseEnvelope,
     setFatigueResult,
     setProcessResult,
     setMetallurgyResult,
@@ -63,6 +68,7 @@ export function ResultsPanel() {
 
   const jointId = activeJoint?.id ?? null;
   const result = jointId ? results[jointId] : undefined;
+  const envelope = jointId ? (loadCaseEnvelopes[jointId] ?? []) : [];
   const jointFatigueResults = jointId ? (fatigueResults[jointId] ?? {}) : {};
   const procResult = jointId ? processResults[jointId] : undefined;
   const metResult = jointId ? metallurgyResults[jointId] : undefined;
@@ -90,18 +96,45 @@ export function ResultsPanel() {
       setLoading(activeJoint.id, true);
       setError(activeJoint.id, null);
       try {
-        // Find the first static load case for structural analysis
-        const staticCase = activeJoint.loadCases.find((lc) => lc.type === "static") as StaticLoadCase | undefined;
-        const loads = staticCase?.forces ?? { Fx: 0, Fy: 0, Fz: 0, Mx: 0, My: 0, Mz: 0 };
+        // Analyze every static load case and envelope them: the governing
+        // (highest-utilization) case becomes the displayed design check.
+        const staticCases = activeJoint.loadCases.filter(
+          (lc) => lc.type === "static"
+        ) as StaticLoadCase[];
+        const casesToRun: StaticLoadCase[] = staticCases.length > 0
+          ? staticCases
+          : [{ id: "lc-none", name: "No load", type: "static", category: "O",
+              forces: { Fx: 0, Fy: 0, Fz: 0, Mx: 0, My: 0, Mz: 0 } }];
 
-        const res = await callEngine<AnalysisResult>(pyodide, "analyze_joint", {
-          joint: { ...activeJoint.geometry, type: activeJoint.type },
-          material: activeJoint.material,
-          loads,
-          service: activeJoint.service,
-        }, signal);
-        if (signal.aborted) return;
-        setResult(activeJoint.id, res);
+        const runResults: AnalysisResult[] = [];
+        const entries: Omit<LoadCaseUtilization, "governs">[] = [];
+        for (const sc of casesToRun) {
+          const r = await callEngine<AnalysisResult>(pyodide, "analyze_joint", {
+            joint: { ...activeJoint.geometry, type: activeJoint.type },
+            material: activeJoint.material,
+            loads: sc.forces,
+            service: activeJoint.service,
+          }, signal);
+          if (signal.aborted) return;
+          runResults.push(r);
+          entries.push({
+            id: sc.id,
+            name: sc.name,
+            category: sc.category,
+            utilization_pct: r.structural_governing.utilization_pct,
+            adequate: r.structural_governing.adequate,
+          });
+        }
+
+        const govIdx = governingIndex(entries.map((e) => e.utilization_pct));
+        setResult(activeJoint.id, runResults[govIdx]);
+        // Only expose the per-case envelope when there is more than one case.
+        setLoadCaseEnvelope(
+          activeJoint.id,
+          staticCases.length > 1
+            ? entries.map((e, i) => ({ ...e, governs: i === govIdx }))
+            : []
+        );
 
         // For each cyclic/spectrum load case, call fatigue engine
         const cyclicCases = activeJoint.loadCases.filter(
@@ -233,6 +266,7 @@ export function ResultsPanel() {
         )}
         {result && (
           <>
+            <LoadCaseEnvelope envelope={envelope} />
             <StructuralResults result={result} loading={isLoading} />
             <WeldSymbolPreview result={result} />
             <WarningsList result={result} />

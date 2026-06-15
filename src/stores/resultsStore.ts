@@ -1,8 +1,9 @@
 import { create } from "zustand";
-import type { AnalysisResult, FatigueResult, ProcessResult, MetallurgyResult, DistortionResult } from "../types";
+import type { AnalysisResult, FatigueResult, ProcessResult, MetallurgyResult, DistortionResult, LoadCaseUtilization } from "../types";
 
 interface ResultsStore {
   results: Record<string, AnalysisResult>;
+  loadCaseEnvelopes: Record<string, LoadCaseUtilization[]>;
   fatigueResults: Record<string, Record<string, FatigueResult>>;
   processResults: Record<string, ProcessResult>;
   metallurgyResults: Record<string, MetallurgyResult>;
@@ -10,6 +11,7 @@ interface ResultsStore {
   loading: Record<string, boolean>;
   errors: Record<string, string | null>;
   setResult: (jointId: string, result: AnalysisResult) => void;
+  setLoadCaseEnvelope: (jointId: string, envelope: LoadCaseUtilization[]) => void;
   setFatigueResult: (jointId: string, loadCaseId: string, result: FatigueResult) => void;
   setProcessResult: (jointId: string, r: ProcessResult) => void;
   setMetallurgyResult: (jointId: string, r: MetallurgyResult) => void;
@@ -20,6 +22,7 @@ interface ResultsStore {
 
 export const useResultsStore = create<ResultsStore>((set) => ({
   results: {},
+  loadCaseEnvelopes: {},
   fatigueResults: {},
   processResults: {},
   metallurgyResults: {},
@@ -28,6 +31,8 @@ export const useResultsStore = create<ResultsStore>((set) => ({
   errors: {},
   setResult: (jointId, result) =>
     set((s) => ({ results: { ...s.results, [jointId]: result } })),
+  setLoadCaseEnvelope: (jointId, envelope) =>
+    set((s) => ({ loadCaseEnvelopes: { ...s.loadCaseEnvelopes, [jointId]: envelope } })),
   setFatigueResult: (jointId, loadCaseId, result) =>
     set((s) => ({
       fatigueResults: {

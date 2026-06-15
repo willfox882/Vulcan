@@ -252,6 +252,15 @@ export interface DistortionResult {
   note: string;
 }
 
+export interface LoadCaseUtilization {
+  id: string;
+  name: string;
+  category: string;
+  utilization_pct: number;
+  adequate: boolean;
+  governs: boolean;
+}
+
 export interface AnalysisResult {
   structural_elastic: StructuralMethodResult;
   structural_ic: StructuralMethodResult | null;   // null for butt joints
