@@ -1,11 +1,12 @@
 import { create } from "zustand";
 import { initializePyodide } from "../lib/pyodide";
-import type { PyodideInterface } from "pyodide";
 
 interface PyodideStore {
   status: "idle" | "loading" | "ready" | "error";
   progressMessage: string;
-  instance: PyodideInterface | null;
+  // Pyodide now lives in a Web Worker; the main thread holds no instance, only
+  // readiness. Engine calls go through callEngine() in lib/pyodide.ts.
+  ready: boolean;
   error: string | null;
   initialize: () => Promise<void>;
 }
@@ -13,16 +14,16 @@ interface PyodideStore {
 export const usePyodideStore = create<PyodideStore>((set, get) => ({
   status: "idle",
   progressMessage: "",
-  instance: null,
+  ready: false,
   error: null,
   initialize: async () => {
     if (get().status !== "idle") return;
     set({ status: "loading", progressMessage: "Starting..." });
     try {
-      const instance = await initializePyodide((msg) => {
+      await initializePyodide((msg) => {
         set({ progressMessage: msg });
       });
-      set({ status: "ready", instance, progressMessage: "Ready." });
+      set({ status: "ready", ready: true, progressMessage: "Ready." });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       set({ status: "error", error: msg });

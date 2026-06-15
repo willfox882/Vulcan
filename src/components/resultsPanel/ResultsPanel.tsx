@@ -44,7 +44,7 @@ function SkeletonCard() {
 
 export function ResultsPanel() {
   const { activeJoint } = useProjectStore();
-  const { instance: pyodide } = usePyodideStore();
+  const ready = usePyodideStore((s) => s.status === "ready");
   const { reportSettings } = useUIStore();
   const {
     results,
@@ -77,7 +77,7 @@ export function ResultsPanel() {
   const error = jointId ? errors[jointId] : null;
 
   useEffect(() => {
-    if (!activeJoint || !pyodide) return;
+    if (!activeJoint || !ready) return;
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const ac = new AbortController();
@@ -109,7 +109,7 @@ export function ResultsPanel() {
         const runResults: AnalysisResult[] = [];
         const entries: Omit<LoadCaseUtilization, "governs">[] = [];
         for (const sc of casesToRun) {
-          const r = await callEngine<AnalysisResult>(pyodide, "analyze_joint", {
+          const r = await callEngine<AnalysisResult>("analyze_joint", {
             joint: { ...activeJoint.geometry, type: activeJoint.type },
             material: activeJoint.material,
             loads: sc.forces,
@@ -172,7 +172,7 @@ export function ResultsPanel() {
 
           const loadDirection =
             (lc as CyclicLoadCase | SpectrumLoadCase).loadDirection ?? "transverse";
-          const fatRes = await callEngine<FatigueResult>(pyodide, "analyze_fatigue", {
+          const fatRes = await callEngine<FatigueResult>("analyze_fatigue", {
             joint: { ...activeJoint.geometry, type: activeJoint.type },
             structural: { load_direction: loadDirection },
             fatigue: fatigueInput,
@@ -182,7 +182,7 @@ export function ResultsPanel() {
         }
 
         // Process selector
-        const procRes = await callEngine<ProcessResult>(pyodide, "select_process", {
+        const procRes = await callEngine<ProcessResult>("select_process", {
           material: { ...activeJoint.material },
           joint: {
             ...activeJoint.geometry,
@@ -197,7 +197,7 @@ export function ResultsPanel() {
         setProcessResult(activeJoint.id, procRes);
 
         // Metallurgy
-        const metRes = await callEngine<MetallurgyResult>(pyodide, "analyze_metallurgy", {
+        const metRes = await callEngine<MetallurgyResult>("analyze_metallurgy", {
           material: { ...activeJoint.material },
           joint: { ...activeJoint.geometry, type: activeJoint.type },
           process: procRes.primary,
@@ -207,7 +207,7 @@ export function ResultsPanel() {
         setMetallurgyResult(activeJoint.id, metRes);
 
         // Distortion
-        const distRes = await callEngine<DistortionResult>(pyodide, "predict_distortion", {
+        const distRes = await callEngine<DistortionResult>("predict_distortion", {
           joint: { ...activeJoint.geometry, type: activeJoint.type },
         }, signal);
         if (signal.aborted) return;
@@ -224,7 +224,7 @@ export function ResultsPanel() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       ac.abort();
     };
-  }, [activeJoint, pyodide]);
+  }, [activeJoint, ready]);
 
   if (!activeJoint) {
     return (

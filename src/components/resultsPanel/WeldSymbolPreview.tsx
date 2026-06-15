@@ -13,17 +13,17 @@ interface Props {
 }
 
 export function WeldSymbolPreview({ result }: Props) {
-  const { instance: pyodide } = usePyodideStore();
+  const ready = usePyodideStore((s) => s.status === "ready");
   const [symbolData, setSymbolData] = useState<SymbolResponse | null>(null);
 
   const sym = result.symbol;
 
   useEffect(() => {
-    if (!pyodide) return;
+    if (!ready) return;
     const ac = new AbortController();
     const t = setTimeout(() => {
       if (ac.signal.aborted) return;
-      callEngine<SymbolResponse>(pyodide, "generate_symbol_svg", {
+      callEngine<SymbolResponse>("generate_symbol_svg", {
         weld_type: sym.weld_type ?? "fillet",
         size: sym.size,
         configuration: sym.configuration,
@@ -48,7 +48,7 @@ export function WeldSymbolPreview({ result }: Props) {
       ac.abort();
     };
   }, [
-    pyodide,
+    ready,
     sym.weld_type,
     sym.size,
     sym.configuration,

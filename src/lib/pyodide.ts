@@ -1,159 +1,156 @@
-import type { PyodideInterface } from "pyodide";
+import type { WorkerIn, WorkerOut } from "./pyodideProtocol";
 
-async function fetchText(url: string): Promise<string> {
-  let res: Response;
-  try {
-    res = await fetch(url);
-  } catch {
-    throw new Error(`Network error loading ${url} — check your connection and reload.`);
-  }
-  if (!res.ok) {
-    throw new Error(`Failed to load ${url} (HTTP ${res.status}).`);
-  }
-  return res.text();
+/**
+ * Transport abstraction over the Web Worker. Injecting it keeps the client
+ * logic (request/response correlation, abort, JSON revival) testable in a
+ * plain node environment without a real Worker.
+ */
+export interface Transport {
+  post(msg: WorkerIn): void;
+  setHandler(cb: (msg: WorkerOut) => void): void;
 }
 
-export async function initializePyodide(
-  onProgress: (msg: string) => void
-): Promise<PyodideInterface> {
-  // The Pyodide runtime is injected by the CDN <script> in index.html. If the
-  // network is unavailable (or the CDN is blocked) on first load, that global
-  // is missing — surface an actionable message instead of a bare
-  // "loadPyodide is not defined" ReferenceError.
-  if (typeof loadPyodide === "undefined") {
-    throw new Error(
-      "Could not reach the Pyodide runtime (CDN). The first load needs an internet connection; reconnect and reload. Once cached, VULCAN works offline."
-    );
-  }
-
-  onProgress("Loading Python runtime (one-time, ~12 seconds)...");
-  const pyodide = await loadPyodide({
-    indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.0/full/",
-  });
-
-  onProgress("Installing NumPy and SciPy...");
-  await pyodide.loadPackage(["numpy", "scipy"]);
-
-  // Global reference-data dict + a JSON encoder that survives non-finite
-  // floats. Python's json.dumps emits the bare tokens Infinity / -Infinity /
-  // NaN, which JSON.parse rejects — so we encode them as sentinel strings and
-  // revive them on the JS side (see callEngine). This protects every engine,
-  // e.g. fatigue returning float("inf") for infinite life.
-  await pyodide.runPythonAsync(`
-import json as _json, math as _math
-
-_tables = {}
-
-def _vulcan_sanitize(o):
-    if isinstance(o, float):
-        if _math.isinf(o):
-            return "__Infinity__" if o > 0 else "__-Infinity__"
-        if _math.isnan(o):
-            return "__NaN__"
-        return o
-    if isinstance(o, dict):
-        return {k: _vulcan_sanitize(v) for k, v in o.items()}
-    if isinstance(o, (list, tuple)):
-        return [_vulcan_sanitize(v) for v in o]
-    return o
-
-def _vulcan_safe_dumps(o):
-    return _json.dumps(_vulcan_sanitize(o))
-`);
-
-  onProgress("Loading reference data...");
-  const dataFiles = [
-    "aws_d11_table_5_7",
-    "aisc_360_j2",
-    "materials_steel",
-    "electrodes_aws_a5",
-    "aws_d11_annex_k",
-    "aws_d11_table_5_8",
-    "materials_stainless",
-    "materials_aluminum",
-    "filler_match",
-  ];
-  for (const name of dataFiles) {
-    const json = await fetchText(`/python/data/${name}.json`);
-    pyodide.globals.set(`_json_${name}`, json);
-    await pyodide.runPythonAsync(`
-import json as _json
-_tables["${name}"] = _json.loads(_json_${name})
-`);
-  }
-
-  onProgress("Loading calculation engines...");
-  for (const name of ["classifier", "structural", "symbol", "fatigue", "process", "metallurgy", "distortion"]) {
-    const code = await fetchText(`/python/engines/${name}.py`);
-    await pyodide.runPythonAsync(code);
-  }
-
-  onProgress("Ready.");
-  return pyodide;
-}
-
-// Serializing queue: only one Pyodide call executes at a time.
-// Prevents concurrent callers from overwriting each other's input global.
-let _callCounter = 0;
-let _callQueue: Promise<unknown> = Promise.resolve();
-
-class AbortedError extends Error {
+export class AbortedError extends Error {
   name = "AbortError";
   constructor() {
     super("Pyodide call aborted");
   }
 }
 
-export async function callEngine<T>(
-  pyodide: PyodideInterface,
-  functionName: string,
-  input: unknown,
-  signal?: AbortSignal
-): Promise<T> {
-  const id = ++_callCounter;
-  const key = `_call_input_${id}`;
+export interface PyodideClient {
+  init(onProgress: (msg: string) => void): Promise<void>;
+  call<T>(functionName: string, input: unknown, signal?: AbortSignal): Promise<T>;
+}
 
-  const task = _callQueue.then(async () => {
-    if (signal?.aborted) throw new AbortedError();
+interface EngineEnvelope<T> {
+  ok: boolean;
+  data?: T;
+  error?: string;
+  trace?: string;
+}
 
-    pyodide.globals.set(key, JSON.stringify(input));
-    try {
-      const resultJson = (await pyodide.runPythonAsync(`
-import json as _json, traceback as _tb
-try:
-    _result = ${functionName}(_json.loads(${key}))
-    _out = _vulcan_safe_dumps({"ok": True, "data": _result})
-except Exception as _e:
-    _out = _vulcan_safe_dumps({"ok": False, "error": str(_e), "trace": _tb.format_exc()})
-_out
-`)) as string;
+// Python's json.dumps can't emit Infinity / NaN as valid JSON, so the worker
+// encodes them as sentinel strings; revive them here.
+function reviveEnvelope<T>(json: string): EngineEnvelope<T> {
+  return JSON.parse(json, (_k, v) =>
+    v === "__Infinity__"
+      ? Infinity
+      : v === "__-Infinity__"
+        ? -Infinity
+        : v === "__NaN__"
+          ? NaN
+          : v
+  ) as EngineEnvelope<T>;
+}
 
-      if (signal?.aborted) throw new AbortedError();
+export function createPyodideClient(transport: Transport): PyodideClient {
+  let nextId = 0;
+  const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: unknown) => void }>();
+  let onProgress: ((msg: string) => void) | null = null;
+  let initResolve: (() => void) | null = null;
+  let initReject: ((e: Error) => void) | null = null;
 
-      const result = JSON.parse(resultJson, (_k, v) =>
-        v === "__Infinity__" ? Infinity
-        : v === "__-Infinity__" ? -Infinity
-        : v === "__NaN__" ? NaN
-        : v
-      ) as {
-        ok: boolean;
-        data?: T;
-        error?: string;
-        trace?: string;
-      };
-      if (!result.ok) {
-        console.error("Python engine error:", result.trace);
-        throw new Error(result.error ?? "Unknown Python engine error");
+  transport.setHandler((msg) => {
+    switch (msg.type) {
+      case "progress":
+        onProgress?.(msg.msg);
+        break;
+      case "ready":
+        initResolve?.();
+        initResolve = initReject = null;
+        break;
+      case "init-error":
+        initReject?.(new Error(msg.error));
+        initResolve = initReject = null;
+        break;
+      case "result": {
+        const p = pending.get(msg.id);
+        // No pending entry => the caller already aborted; drop the late result.
+        if (!p) break;
+        pending.delete(msg.id);
+        let env: EngineEnvelope<unknown>;
+        try {
+          env = reviveEnvelope(msg.data);
+        } catch (err) {
+          p.reject(err);
+          break;
+        }
+        if (!env.ok) {
+          if (env.trace) console.error("Python engine error:", env.trace);
+          p.reject(new Error(env.error ?? "Unknown Python engine error"));
+        } else {
+          p.resolve(env.data);
+        }
+        break;
       }
-      return result.data as T;
-    } finally {
-      pyodide.globals.delete(key);
     }
   });
 
-  // Chain the next caller behind this one, but don't propagate rejection
-  // into the queue itself (each caller observes its own error via `task`).
-  _callQueue = task.catch(() => {});
+  return {
+    init(progress) {
+      onProgress = progress;
+      return new Promise<void>((resolve, reject) => {
+        initResolve = resolve;
+        initReject = reject;
+        transport.post({ type: "init" });
+      });
+    },
 
-  return task as Promise<T>;
+    call<T>(functionName: string, input: unknown, signal?: AbortSignal): Promise<T> {
+      return new Promise<T>((resolve, reject) => {
+        if (signal?.aborted) {
+          reject(new AbortedError());
+          return;
+        }
+        const id = ++nextId;
+        const onAbort = () => {
+          // Abort just stops the UI from applying the result — Python can't be
+          // interrupted mid-run, so the eventual worker reply is dropped above.
+          if (pending.delete(id)) reject(new AbortedError());
+        };
+        pending.set(id, {
+          resolve: (v) => {
+            signal?.removeEventListener("abort", onAbort);
+            resolve(v as T);
+          },
+          reject: (e) => {
+            signal?.removeEventListener("abort", onAbort);
+            reject(e);
+          },
+        });
+        signal?.addEventListener("abort", onAbort);
+        transport.post({ type: "call", id, fn: functionName, input: JSON.stringify(input) });
+      });
+    },
+  };
+}
+
+// --- Real Worker-backed singleton ------------------------------------------
+
+function createWorkerTransport(): Transport {
+  const worker = new Worker(new URL("./pyodideWorker.ts", import.meta.url), {
+    type: "module",
+  });
+  return {
+    post: (msg) => worker.postMessage(msg),
+    setHandler: (cb) => {
+      worker.onmessage = (e: MessageEvent<WorkerOut>) => cb(e.data);
+    },
+  };
+}
+
+let _client: PyodideClient | null = null;
+function getClient(): PyodideClient {
+  if (!_client) _client = createPyodideClient(createWorkerTransport());
+  return _client;
+}
+
+/** Spin up the Pyodide worker and resolve once it is ready to take calls. */
+export function initializePyodide(onProgress: (msg: string) => void): Promise<void> {
+  return getClient().init(onProgress);
+}
+
+/** Run a Python engine function in the worker and return its parsed result. */
+export function callEngine<T>(functionName: string, input: unknown, signal?: AbortSignal): Promise<T> {
+  return getClient().call<T>(functionName, input, signal);
 }
