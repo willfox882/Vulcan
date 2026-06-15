@@ -1,5 +1,34 @@
 # VULCAN — Progress
 
+## Post-ship Audit Cycle: COMPLETE (2026-06-14)
+
+A full adversarial audit of the shipped v1.0 found defects that the prior
+"Pass (logic)" smoke checks missed because the engines had only ever been
+exercised directly in CPython — never across the real browser data path
+(JSON transport, the unit toggle, the `Fx` input). All Critical/High/Medium
+items, plus the Low-tier cleanups, are fixed, tested, and pushed.
+
+| ID | Sev | Fix |
+|----|-----|-----|
+| C1 | Critical | JSON transport now survives non-finite floats (`inf`/`nan`) — fatigue infinite-life no longer crashes the engine call. Sentinel encode + `JSON.parse` reviver in `pyodide.ts`. |
+| H1 | High | SI/US toggle now actually converts input values (was relabel-only); shared `NumericField` + `toDisplay/fromDisplay` in `units.ts`. Result panels also display active units. |
+| H2 | High | `Fx` (along-weld longitudinal shear) was ignored by every engine (false ADEQUATE); now included in all fillet groups. |
+| H3 | High | Butt CJP combined axial+bending by SRSS (unconservative); now algebraic sum, with `Fz` shear via von Mises. |
+| H4 | High | Test suite was uncollectable on Windows (cp1252 vs UTF-8); fixed encoding. |
+| M1 | Med | Fatigue Category F constant was unit/slope-inconsistent; corrected to AISC Eq. A-3-2 (m=6, MPa-consistent `Cf=1.61e17`). |
+| M2 | Med | IC method now uses the full Lesik-Kennedy curve (directional factor + angle-dependent Δ_ult). |
+| M3 | Med | `.vulcan` load now validates shape, migrates null-safely, and surfaces errors to the user. |
+| M4 | Med | Fatigue load direction is user-selectable (was hardcoded "transverse"). |
+| M5 | Med | T-joint engine uses `.get` defaults (was raw `KeyError`). |
+| L1–L6 | Low | `Fz` in butt (via H3); dead-code removal; governing-rule docs; Pyodide offline messaging; results-panel units; docs accuracy. |
+
+**Verification:** `python -m pytest public/python/tests/` → 36 passed (was
+uncollectable on Windows). `npx tsc --noEmit` clean. `npm run build` clean.
+TS conversion/validation logic verified via esbuild+Node. Each fix shipped
+with a regression test.
+
+---
+
 ## Phase 1: COMPLETE (2026-05-06)
 ## Phase 2: COMPLETE (2026-05-06)
 ## Phase 3: COMPLETE (2026-05-07)

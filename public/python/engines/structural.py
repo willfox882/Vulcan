@@ -5,6 +5,18 @@ import math
 # ─── ENTRY POINT ─────────────────────────────────────────────────────────────
 
 def analyze_joint(input_data: dict) -> dict:
+    # GOVERNING-METHOD POLICY
+    # -----------------------
+    # For joints analysed by both methods we report whichever gives the higher
+    # utilization. Note the two ratios are built on *different* bases: the
+    # Elastic TWL ratio is an allowable-stress check (f_R / F_w_allow), while
+    # the IC ratio is an ultimate-strength check (P_applied / P_allow, with
+    # P_allow = P_n/Omega or phi*P_n). Mixing them is intentionally
+    # conservative — taking the max never reports a capacity higher than the
+    # more cautious of the two methods. The IC method also models only the
+    # in-plane Fy + Mz demand; the Elastic method carries the full 6-DOF load,
+    # so the max() rule guarantees out-of-plane components are never dropped
+    # from the governing check.
     joint = input_data["joint"]
     material = input_data["material"]
     loads = input_data["loads"]       # single static load case (first static case)
@@ -14,9 +26,6 @@ def analyze_joint(input_data: dict) -> dict:
     if joint_type == "t_joint":
         elastic = _elastic_twl_t_joint(joint, material, loads, service)
         ic = _ic_method_t_joint(joint, material, loads, service)
-        # Governing = whichever method gives the higher demand. IC is
-        # generally less conservative than Elastic for combined loads; the
-        # design check must use the worst-case utilization.
         governing = elastic if elastic.get("utilization", 0) >= ic.get("utilization", 0) else ic
     elif joint_type == "lap_joint":
         elastic = _elastic_twl_lap(joint, material, loads, service)
@@ -542,8 +551,7 @@ def _ic_capacity(elements, elem_len, w, F_EXX, Fy, Mz, N_samples=51):
         return None, None
 
     e = Mz / Fy
-    du_crit = _delta_ult_fn(0.0, w)
-    if du_crit < 1e-9:
+    if w < 1e-9:
         return None, None
 
     def _force_sums(x_ic):
@@ -562,8 +570,7 @@ def _ic_capacity(elements, elem_len, w, F_EXX, Fy, Mz, N_samples=51):
         sin_theta = np.clip(sin_theta, 0.0, 1.0)
         theta = np.arcsin(sin_theta)
         # Angle-dependent ultimate deformation (AISC J2 commentary).
-        du = 1.087 * (np.degrees(theta) + 6.0) ** (-0.65) * w
-        du = np.minimum(du, 0.17 * w)
+        du = _delta_ult_fn(theta, w)
         # Rigid-body compatibility about IC: delta_i = omega * r_i. The first
         # element to rupture maximizes r_i / du_i; scale so its rho = 1. (du is
         # proportional to w and cancels here, so rho — and hence P_n/w — is
@@ -667,22 +674,14 @@ def _ic_result_from_capacity(P_n, P_applied, w, service, F_EXX, total_weld_L, x_
     return res
 
 
-def _weld_element_force(theta_rad, w_mm, F_EXX_MPa, delta, delta_ult):
-    """Lesik-Kennedy load-deformation curve for a fillet weld element."""
-    if delta_ult < 1e-9:
-        return 0.0
-    rho = min(delta / delta_ult, 1.0)
-    R_ult = 0.60 * F_EXX_MPa * 0.707 * w_mm
-    angle_factor = 1.0 + 0.5 * np.sin(theta_rad)**1.5
-    deformation_factor = (rho * (1.9 - 0.9 * rho))**0.3 if rho > 0 else 0.0
-    return R_ult * angle_factor * deformation_factor
-
-
 def _delta_ult_fn(theta_rad, w_mm):
-    """Ultimate deformation per AISC J2 Commentary."""
+    """Ultimate weld-element deformation per AISC J2 Commentary.
+
+    Accepts scalar or numpy-array theta (np.minimum broadcasts either way).
+    """
     theta_deg = np.degrees(theta_rad)
-    val = 1.087 * (theta_deg + 6)**(-0.65) * w_mm
-    return min(val, 0.17 * w_mm)
+    val = 1.087 * (theta_deg + 6) ** (-0.65) * w_mm
+    return np.minimum(val, 0.17 * w_mm)
 
 
 # ─── SHARED HELPERS ──────────────────────────────────────────────────────────

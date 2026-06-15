@@ -27,6 +27,27 @@ npm run build
 npm run preview   # local preview of dist/
 ```
 
+## Testing
+
+Python engine tests (numpy + scipy required):
+
+```bash
+python -m pytest public/python/tests/ -q   # 36 tests
+```
+
+The suite runs under plain CPython (it injects the reference-data `_tables`
+that the browser normally provides via Pyodide) and is cross-platform —
+files are read as UTF-8 so it runs on Windows as well as POSIX.
+
+Notes:
+- `test_audit_phase_b.py` imports the engines directly and includes the
+  post-ship audit regressions (JSON transport, `Fx` shear, butt-weld stress
+  combination, fatigue Category F, IC method, file-load migration, etc.).
+- Front-end logic that has no JS test runner yet (unit conversion in
+  `src/lib/units.ts`, project validation/migration in `src/lib/fileIO.ts`)
+  is verified by transpiling with esbuild and asserting in Node; adding a
+  Vitest harness for permanent coverage is on the roadmap.
+
 ## Deploy to Vercel
 
 1. Push to GitHub.

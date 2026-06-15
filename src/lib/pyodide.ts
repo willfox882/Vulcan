@@ -1,8 +1,31 @@
 import type { PyodideInterface } from "pyodide";
 
+async function fetchText(url: string): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch {
+    throw new Error(`Network error loading ${url} — check your connection and reload.`);
+  }
+  if (!res.ok) {
+    throw new Error(`Failed to load ${url} (HTTP ${res.status}).`);
+  }
+  return res.text();
+}
+
 export async function initializePyodide(
   onProgress: (msg: string) => void
 ): Promise<PyodideInterface> {
+  // The Pyodide runtime is injected by the CDN <script> in index.html. If the
+  // network is unavailable (or the CDN is blocked) on first load, that global
+  // is missing — surface an actionable message instead of a bare
+  // "loadPyodide is not defined" ReferenceError.
+  if (typeof loadPyodide === "undefined") {
+    throw new Error(
+      "Could not reach the Pyodide runtime (CDN). The first load needs an internet connection; reconnect and reload. Once cached, VULCAN works offline."
+    );
+  }
+
   onProgress("Loading Python runtime (one-time, ~12 seconds)...");
   const pyodide = await loadPyodide({
     indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.0/full/",
@@ -51,7 +74,7 @@ def _vulcan_safe_dumps(o):
     "filler_match",
   ];
   for (const name of dataFiles) {
-    const json = await fetch(`/python/data/${name}.json`).then((r) => r.text());
+    const json = await fetchText(`/python/data/${name}.json`);
     pyodide.globals.set(`_json_${name}`, json);
     await pyodide.runPythonAsync(`
 import json as _json
@@ -61,7 +84,7 @@ _tables["${name}"] = _json.loads(_json_${name})
 
   onProgress("Loading calculation engines...");
   for (const name of ["classifier", "structural", "symbol", "fatigue", "process", "metallurgy", "distortion"]) {
-    const code = await fetch(`/python/engines/${name}.py`).then((r) => r.text());
+    const code = await fetchText(`/python/engines/${name}.py`);
     await pyodide.runPythonAsync(code);
   }
 
