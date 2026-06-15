@@ -7,5 +7,5 @@
   "D":        { "Cf_MPa": 7.21e11, "m": 3, "threshold_MPa": 48,  "description": "PJP transverse; fillet welds parallel >50mm long" },
   "E":        { "Cf_MPa": 3.61e11, "m": 3, "threshold_MPa": 31,  "description": "Fillet welded lateral attachments" },
   "E_prime":  { "Cf_MPa": 1.28e11, "m": 3, "threshold_MPa": 18,  "description": "Fillet welds, attachments >100mm long" },
-  "F":        { "Cf_MPa": 8.90e15, "m": 4.5, "threshold_MPa": 55, "description": "Fillet welds in shear, transverse loading (m=4.5 slope, ksi^4.5 basis)" }
+  "F":        { "Cf_MPa": 1.61e17, "m": 6, "threshold_MPa": 55, "description": "Fillet/PJP welds, shear on weld throat (AISC 360 Eq. A-3-2: m=6 / exp 0.167; Cf=150e10 ksi basis x 6.895^6 -> MPa)" }
 }

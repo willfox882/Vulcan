@@ -31,7 +31,7 @@ structural._tables = {
 fatigue._tables = {
     "aws_d11_annex_k": {
         "E": {"Cf_MPa": 3.61e11, "m": 3, "threshold_MPa": 31, "description": "E"},
-        "F": {"Cf_MPa": 8.90e15, "m": 4.5, "threshold_MPa": 55, "description": "F"},
+        "F": {"Cf_MPa": 1.61e17, "m": 6, "threshold_MPa": 55, "description": "F"},
     }
 }
 
@@ -160,6 +160,26 @@ def test_b5_fatigue_cat_e_constant_amplitude():
     })
     assert _approx(res["cycles_to_failure"], 1.671e6, 0.005), f"N_f={res['cycles_to_failure']}"
     assert res["below_threshold"] is False
+
+
+def test_m1_fatigue_cat_f_mpa_consistent_with_ksi_basis():
+    """M1 regression: Category F must use the AISC 360 Eq. A-3-2 slope
+    (m=6, exponent 0.167) on a MPa-consistent constant. Validate the engine
+    life against the canonical ksi-basis reference N = 150e10 / sigma_ksi^6,
+    independent of the stored MPa constant. Previously m=4.5 with a ksi-basis
+    constant applied to MPa gave a life ~4 orders of magnitude off."""
+    KSI_PER_MPA = 0.14503774
+    for ds_mpa in (75.0, 120.0):
+        res = fatigue.analyze_fatigue({
+            "joint": {"type": "lap_joint"},
+            "structural": {"load_direction": "transverse"},   # -> Category F
+            "fatigue": {"type": "constant_amplitude", "stress_range_MPa": ds_mpa},
+        })
+        assert res["category"] == "F", res["category"]
+        assert res["m"] == 6, res["m"]
+        n_ref = 150e10 / ((ds_mpa * KSI_PER_MPA) ** 6)
+        assert _approx(res["cycles_to_failure"], n_ref, 0.01), \
+            f"ds={ds_mpa}MPa engine={res['cycles_to_failure']:.3e} ref={n_ref:.3e}"
 
 
 def test_b6_fatigue_below_threshold():
