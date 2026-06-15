@@ -1,28 +1,11 @@
 import { useProjectStore } from "../../../stores/projectStore";
-import { UNIT_LABELS } from "../../../lib/units";
+import { NumericField } from "../NumericField";
 import type { CruciformJointGeometry } from "../../../types";
 
-function NumericField({ label, value, onChange, unit, min = 0.1 }: {
-  label: string; value: number; onChange: (v: number) => void; unit: string; min?: number;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="text-text-tertiary text-xs">{label}</label>
-      <div className="flex items-center gap-1.5">
-        <input type="number" value={value} min={min} step="0.5"
-          onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-          className="flex-1 bg-bg-elevated border border-border-subtle rounded px-2 py-1.5 text-sm text-text-primary font-mono focus:outline-none focus:border-accent/60 transition-colors" />
-        <span className="text-text-tertiary text-xs w-8">{unit}</span>
-      </div>
-    </div>
-  );
-}
-
 export function CruciformJointGeometryPanel() {
-  const { activeJoint, unitSystem, updateJoint } = useProjectStore();
+  const { activeJoint, updateJoint } = useProjectStore();
   if (!activeJoint) return null;
 
-  const units = UNIT_LABELS[unitSystem];
   const g = activeJoint.geometry as CruciformJointGeometry;
 
   function update(key: keyof CruciformJointGeometry, val: number) {
@@ -32,10 +15,10 @@ export function CruciformJointGeometryPanel() {
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-2 gap-3">
-        <NumericField label="Web Thickness (t_w)" value={g.webThickness} onChange={(v) => update("webThickness", v)} unit={units.length} />
-        <NumericField label="Flange Thickness (t_f)" value={g.flangeThickness} onChange={(v) => update("flangeThickness", v)} unit={units.length} />
-        <NumericField label="Joint Length (L)" value={g.jointLength} onChange={(v) => update("jointLength", v)} unit={units.length} />
-        <NumericField label="Weld Leg Size (w)" value={g.weldSize} onChange={(v) => update("weldSize", v)} unit={units.length} />
+        <NumericField label="Web Thickness (t_w)" value={g.webThickness} onChange={(v) => update("webThickness", v)} />
+        <NumericField label="Flange Thickness (t_f)" value={g.flangeThickness} onChange={(v) => update("flangeThickness", v)} />
+        <NumericField label="Joint Length (L)" value={g.jointLength} onChange={(v) => update("jointLength", v)} />
+        <NumericField label="Weld Leg Size (w)" value={g.weldSize} onChange={(v) => update("weldSize", v)} />
       </div>
       <p className="text-text-tertiary text-[10px]">
         4 fillet welds — both sides of web at both flanges

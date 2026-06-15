@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useProjectStore } from "../../stores/projectStore";
-import { UNIT_LABELS } from "../../lib/units";
+import { NumericField } from "./NumericField";
 import type { LoadCaseItem, StaticLoadCase, CyclicLoadCase, SpectrumLoadCase, SpectrumEntry } from "../../types";
 
 let _lcCounter = 2;
@@ -9,8 +9,6 @@ function newLcId(): string {
 }
 
 function StaticFields({ lc, onChange }: { lc: StaticLoadCase; onChange: (updated: StaticLoadCase) => void }) {
-  const { unitSystem } = useProjectStore();
-  const units = UNIT_LABELS[unitSystem];
   const f = lc.forces;
 
   function updateForce(key: keyof typeof f, val: number) {
@@ -23,36 +21,18 @@ function StaticFields({ lc, onChange }: { lc: StaticLoadCase; onChange: (updated
   return (
     <div className="flex flex-col gap-3 mt-2">
       <div>
-        <p className="text-text-tertiary text-xs mb-1">Forces at joint centroid ({units.force})</p>
+        <p className="text-text-tertiary text-xs mb-1">Forces at joint centroid</p>
         <div className="grid grid-cols-3 gap-2">
           {forceKeys.map((k) => (
-            <div key={k} className="flex flex-col gap-1">
-              <label className="text-text-tertiary text-xs">{k}</label>
-              <input
-                type="number"
-                value={f[k]}
-                step="100"
-                onChange={(e) => updateForce(k, parseFloat(e.target.value) || 0)}
-                className="w-full bg-bg-elevated border border-border-subtle rounded px-2 py-1.5 text-sm text-text-primary font-mono focus:outline-none focus:border-accent/60 transition-colors"
-              />
-            </div>
+            <NumericField key={k} label={k} value={f[k]} onChange={(v) => updateForce(k, v)} dimension="force" />
           ))}
         </div>
       </div>
       <div>
-        <p className="text-text-tertiary text-xs mb-1">Moments at joint centroid ({units.moment})</p>
+        <p className="text-text-tertiary text-xs mb-1">Moments at joint centroid</p>
         <div className="grid grid-cols-3 gap-2">
           {momentKeys.map((k) => (
-            <div key={k} className="flex flex-col gap-1">
-              <label className="text-text-tertiary text-xs">{k}</label>
-              <input
-                type="number"
-                value={f[k]}
-                step="10000"
-                onChange={(e) => updateForce(k, parseFloat(e.target.value) || 0)}
-                className="w-full bg-bg-elevated border border-border-subtle rounded px-2 py-1.5 text-sm text-text-primary font-mono focus:outline-none focus:border-accent/60 transition-colors"
-              />
-            </div>
+            <NumericField key={k} label={k} value={f[k]} onChange={(v) => updateForce(k, v)} dimension="moment" />
           ))}
         </div>
       </div>
